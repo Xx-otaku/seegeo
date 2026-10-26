@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-26T13:29:02.095466+00:00",
+  "generatedAt": "2026-10-26T15:05:09.996712+00:00",
   "title": "Design System: seegeo",
   "extensions": {
     "colorMeta": {
@@ -491,7 +491,44 @@
         "name": "mobile",
         "value": "760px"
       }
-    ]
+    ],
+    "baseline": {
+      "navigation": [
+        "问题库",
+        "采集记录",
+        "历史对照",
+        "基线分析",
+        "运行设置"
+      ],
+      "configuration": "既有内联面板：目标品牌在首行、其余为竞品，名称及逗号分隔别名可编辑；可添加、移除竞品。",
+      "filters": [
+        "AI 平台",
+        "开始日期",
+        "结束日期",
+        "问题分组",
+        "信源口径"
+      ],
+      "metrics": "有效回答和信源完整回答分别列出分母及排除项；品牌、网站、目标品牌情感和回答结构用表格承载，未知保持未知。",
+      "share": {
+        "number": "一位小数百分比；未知显示待核对",
+        "track": "80px × 5px; #e8edf5; border-radius: 3px",
+        "fill": "var(--blue); border-radius: 3px",
+        "gap": "10px"
+      },
+      "layout": {
+        "metricTableMinWidth": "500px",
+        "mobileMetricTableMinWidth": "540px",
+        "sampleTableMinWidth": "1050px",
+        "sampleQuestionWidth": "240px–360px",
+        "overflow": "表格自身容器横向滚动；正文和控件不撑宽整页",
+        "pairedColumns": "两列，28px 间隔；≤1200px 单列"
+      },
+      "review": "就地内联核对情感、排名和备注；完整回答默认展开，最大高 330px，内部滚动。情感在未提及品牌时禁用；排名保留未知、已核对、不适用。",
+      "scrollMarginTop": {
+        "desktop": "190px",
+        "mobile": "205px"
+      }
+    }
   },
   "components": [
     {
@@ -531,7 +568,7 @@
       "kind": "nav",
       "refersTo": "nav-item-active",
       "description": "当前工作入口用浅蓝底与蓝字表达。",
-      "html": "<nav class=\"ds-nav\" aria-label=\"主导航\"><button class=\"ds-nav-item ds-active\" aria-current=\"page\">问题库 <span>24</span></button><button class=\"ds-nav-item\">采集记录</button><button class=\"ds-nav-item\">历史对照</button><button class=\"ds-nav-item\">运行设置</button></nav>",
+      "html": "<nav class=\"ds-nav\" aria-label=\"主导航\"><button class=\"ds-nav-item ds-active\" aria-current=\"page\">问题库 <span>24</span></button><button class=\"ds-nav-item\">采集记录</button><button class=\"ds-nav-item\">历史对照</button><button class=\"ds-nav-item\">基线分析</button><button class=\"ds-nav-item\">运行设置</button></nav>",
       "css": ".ds-nav{font-family:-apple-system, BlinkMacSystemFont, \"SF Pro Text\", \"PingFang SC\", \"Helvetica Neue\", sans-serif;display:grid;gap:5px;padding:12px;background:var(--sidebar,#f0f0f2);max-width:208px}.ds-nav-item{font-family:-apple-system, BlinkMacSystemFont, \"SF Pro Text\", \"PingFang SC\", \"Helvetica Neue\", sans-serif;display:flex;align-items:center;gap:10px;text-align:left;padding:10px 12px;border:0;border-radius:7px;color:#44444a;background:transparent;font-size:13px;font-weight:500;cursor:pointer}.ds-nav-item span{margin-left:auto;font-size:11px;font-variant-numeric:tabular-nums}.ds-nav-item:hover{background:#e5e5ea}.ds-nav-item.ds-active{background:#dce8f8;color:var(--blue,#0066cc)}.ds-nav-item:focus-visible{outline:3px solid #80b8f4;outline-offset:2px;}.ds-nav-item:active{transform:translateY(1px)}"
     },
     {
@@ -573,17 +610,24 @@
       "description": "原生 checkbox 支持键盘，视觉轨道紧凑。",
       "html": "<label class=\"ds-switch\"><input type=\"checkbox\" checked aria-label=\"启用问题\"/><span></span></label>",
       "css": ".ds-switch{position:relative;display:inline-flex;min-width:30px}.ds-switch input{position:absolute;opacity:0;width:30px;height:18px;cursor:pointer}.ds-switch>span{width:30px;height:18px;background:#d0d0d6;border-radius:12px;position:relative;pointer-events:none;transition:background .15s}.ds-switch>span:after{content:\"\";position:absolute;left:2px;top:2px;width:14px;height:14px;background:#fff;border-radius:50%;box-shadow:0 1px 2px #0002;transition:transform .15s}.ds-switch input:checked+span{background:var(--blue,#0066cc)}.ds-switch input:checked+span:after{transform:translateX(12px)}.ds-switch input:focus-visible+span{outline:3px solid #80b8f4;outline-offset:2px;outline-offset:3px}.ds-switch input:disabled+span{opacity:.5}@media(prefers-reduced-motion:reduce){.ds-switch>span,.ds-switch>span:after{transition:none}}"
+    },
+    {
+      "name": "Baseline Metric Table",
+      "kind": "custom",
+      "description": "带分母说明、数字与细蓝条的基线指标表；示意值仅用于组件预览。",
+      "html": "<section class=\"ds-baseline\"><h2>各网站占总信源比例</h2><p>正文实际引用共 10 条；同一回答内相同 URL 去重，跨回答重复引用分别计次。</p><div class=\"ds-baseline-wrap\"><table><thead><tr><th>网站</th><th>信源数</th><th>占比</th></tr></thead><tbody><tr><td>example.com</td><td>4</td><td><span class=\"ds-baseline-share\"><span>40.0%</span><span class=\"ds-baseline-bar\" aria-hidden=\"true\"><i></i></span></span></td></tr></tbody></table></div></section>",
+      "css": ".ds-baseline{font-family:-apple-system,BlinkMacSystemFont,\"SF Pro Text\",\"PingFang SC\",\"Helvetica Neue\",sans-serif;color:#1d1d1f;min-width:0}.ds-baseline h2{font-size:17px;margin:0 0 10px;font-weight:600}.ds-baseline p{font-size:11px;color:var(--muted,#65656c);line-height:1.8;max-width:105ch;margin:10px 0 16px}.ds-baseline-wrap{overflow-x:auto;border:1px solid var(--line,#e5e5ea);border-radius:9px;background:#fff}.ds-baseline table{min-width:500px;width:100%;border-collapse:collapse;text-align:left;font-size:12px;font-variant-numeric:tabular-nums}.ds-baseline th{font-size:11px;font-weight:500;color:#606069;background:#f7f7f9;padding:12px 14px;border-bottom:1px solid var(--line,#e5e5ea);white-space:nowrap}.ds-baseline td{padding:15px 14px;line-height:1.7;overflow-wrap:anywhere}.ds-baseline tbody tr:hover{background:#fafafd}.ds-baseline-share{display:flex;align-items:center;gap:10px;min-width:135px;white-space:nowrap}.ds-baseline-share>span:first-child{min-width:46px}.ds-baseline-bar{height:5px;background:#e8edf5;border-radius:3px;width:80px;overflow:hidden}.ds-baseline-bar i{display:block;background:var(--blue,#0066cc);height:100%;width:40%;border-radius:3px}@media(max-width:760px){.ds-baseline table{min-width:540px}}"
     }
   ],
   "narrative": {
     "northStar": "macOS 本机工作台",
-    "overview": "seegeo 采用 Finder、邮件、系统设置的操作秩序：浅灰侧栏、白色工作区、细灰分隔线和系统字体。蓝色用于主操作、当前导航、链接与输入反馈；颜色退居内容之后，让问题、回答、来源与真实任务状态保持清楚。\n\n这是供日常维护与长文核对的中文本机工具。紧凑表格承载问题与三平台结果，较宽行距承载回答；共享任务控制栏跨四个工作页及回答详情持续可见。界面不使用宣传页排版、装饰插图、复杂玻璃或假窗口按钮。",
+    "overview": "seegeo 采用 Finder、邮件、系统设置的操作秩序：浅灰侧栏、白色工作区、细灰分隔线和系统字体。蓝色用于主操作、当前导航、链接与输入反馈；颜色退居内容之后，让问题、回答、来源与真实任务状态保持清楚。\n\n这是供日常维护与长文核对的中文本机工具。紧凑表格承载问题与三平台结果，较宽行距承载回答；共享任务控制栏跨五个工作页及回答详情持续可见。界面不使用宣传页排版、装饰插图、复杂玻璃或假窗口按钮。",
     "keyCharacteristics": [
       "浅灰侧栏、白色工作区、蓝色主操作",
       "系统字体、细分隔线与轻圆角",
       "问题表格紧凑，回答正文宽松",
       "任务控制持续可见，状态与不可用原因具体可读",
-      "窄屏顶部四项导航，表格在自身容器内横向滚动"
+      "窄屏顶部五项导航，表格在自身容器内横向滚动"
     ],
     "rules": [
       {
@@ -599,7 +643,7 @@
     ],
     "dos": [
       "Do 保留系统字体栈、浅灰侧栏、白色工作区与蓝色主操作。",
-      "Do 在四页与回答详情中保留任务控制；暂停、继续、取消和重跑的含义必须可读。",
+      "Do 在五页与回答详情中保留任务控制；暂停、继续、取消和重跑的含义必须可读。",
       "Do 用中文标签与图标说明状态，给不可用操作保留具体原因。",
       "Do 在表格自身容器内横向滚动，允许问题、回答、来源链接与数据路径断行。",
       "Do 保留键盘焦点、真实禁用状态、操作中反馈与减弱动效支持。"

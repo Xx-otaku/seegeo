@@ -51,3 +51,9 @@ Runner 的控制命令使用串行 promise 队列；一个 worker 独占当前�
 `npm run probe -- login all` 是开发用验证工具，会占用同样的浏览器 profile；正式服务退出后才能使用。诊断文件仅保存在本机。Chrome 用户目录被占用时关闭另一个 seegeo/probe 进程；不要删除自己的日常 Chrome 数据目录。
 
 变更接口、状态或来源结构时，同时更新 types、数据库迁移、导出及测试；日志中不记录密码、Cookie、验证码或浏览器存储内容。
+
+## 基线计算与人工核对（数据库 v4）
+
+`server/baseline.ts` 为确定性计算，不使用外部模型。`GET /api/baseline` 接受 platform/from/to/group/sourceKind，返回分母、品牌指标、网站信源份额、结构占比、情感分布及样本明细；`GET /api/baseline/export` 导出同口径 JSON。`PATCH /api/baseline/config` 更新 settings 中的品牌名和别名；`PUT /api/baseline/reviews/:id` 保存 `baseline_reviews`，包含目标品牌、情感、前三品牌、排名不适用、备注和时间。删除记录同时清理核对数据。
+
+排名和情感的未知项单列；情感核对必须绑定当时的目标品牌，更换目标后排除旧目标的情感。批次快照与原回答不受配置变更影响。前端异步筛选使用请求序号，较旧响应不得覆盖新筛选结果。没有自动抓取来源全文，不推测事实错误、投放归属或文章来源结构。
