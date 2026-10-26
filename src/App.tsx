@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, type FormEvent } from "react";
+import { useState, useEffect, useCallback, useRef, createContext, useContext, type FormEvent } from "react";
 import {
   ArrowDownToLine,
   ArrowLeft,
@@ -64,8 +64,16 @@ type Batch = {
   pending: number;
   running: number;
   cancelled: number;
+  control_state: string;
+  paused: number;
+  parent_batch_id: number | null;
 };
 type State = {
+  activeBatch: Batch | null;
+  displayBatch: Batch | null;
+  pausedTask: Pick<Task,"id"|"platform"|"question_text"|"phase"> | null;
+  currentItem: Task | null;
+  controls: Record<"start"|"pause"|"resume"|"cancel"|"rerun",{enabled:boolean;reason:string|null}>;
   token: string;
   paused: boolean;
   busy: boolean;
@@ -85,6 +93,7 @@ type State = {
   notifications: boolean;
 };
 const labels: Record<string, string> = {
+  paused: "已暂停",
   pending: "排队中",
   running: "采集中",
   waiting_login: "需要登录",
@@ -139,7 +148,10 @@ async function api<T = any>(
   return data;
 }
 
+const OperationContext = createContext<{busy:boolean;state:State|null}>({busy:false,state:null});
+
 export default function App() {
+  const actionLock=useRef(false);
   const [state, setState] = useState<State | null>(null),
     [questions, setQuestions] = useState<Q[]>([]),
     [view, setView] = useState<
@@ -178,6 +190,8 @@ export default function App() {
     return () => clearInterval(i);
   }, [refresh]);
   async function act(fn: () => Promise<unknown>, message = "") {
+    if (actionLock.current) return false;
+    actionLock.current=true;
     setBusy(true);
     setError("");
     try {
@@ -189,6 +203,7 @@ export default function App() {
       setError((e as Error).message);
       return false;
     } finally {
+      actionLock.current=false;
       setBusy(false);
     }
   }
@@ -219,6 +234,7 @@ export default function App() {
     if (format) window.location.assign(`/api/export/${format}${query}`);
   }
   return (
+    <OperationContext.Provider value={{busy,state}}>
     <div className="app-shell">
       <aside className="sidebar">
         <a className="brand" href="/" aria-label="seegeo 首页">
@@ -302,6 +318,8 @@ export default function App() {
             {state ? "本机服务运行中" : "正在连接服务"}
           </span>
         </div>
+        <TaskToolbar state={state} busy={busy} selected={selected.length} act={act} onStart={() => {navigate("questions");setRunOpen(true);}} />
+        {busy && <div className="operation-feedback" role="status"><LoaderCircle size={14} className="spin" />正在执行操作…</div>}
         {error && (
           <div className="message error" role="alert">
             <AlertCircle size={17} />
@@ -317,7 +335,7 @@ export default function App() {
             {notice}
           </div>
         )}
-        <div className="workspace">
+        <fieldset className="workspace" disabled={busy} aria-busy={busy}>
           {detail !== null ? (
             <Reader
               questionId={detail}
@@ -383,77 +401,6 @@ export default function App() {
               </header>
               {view === "questions" && (
                 <>
-                  <section className="run-strip" aria-label="监测运行状态">
-                    <div className="run-summary">
-                      <div
-                        className={`run-symbol ${state?.busy ? "live" : ""}`}
-                      >
-                        {state?.busy ? (
-                          <LoaderCircle size={22} className="spin" />
-                        ) : (
-                          <Clock3 size={22} />
-                        )}
-                      </div>
-                      <div>
-                        <strong>
-                          {state?.busy
-                            ? "正在采集"
-                            : state?.paused
-                              ? "监测已暂停"
-                              : latest?.waiting
-                                ? "有任务需要你处理"
-                                : "准备好下一轮监测"}
-                        </strong>
-                        <p>
-                          {state?.busy
-                            ? `本轮共 ${latest?.total || 0} 项 · 已完成 ${(latest?.succeeded || 0) + (latest?.partial || 0) + (latest?.failed || 0)} 项`
-                            : state?.schedule.enabled
-                              ? `下次计划 ${fmt(state.nextRun)} · 北京时间${state.platforms.some((p) => !p.validated) ? " · 待三平台验证后启用" : ""}`
-                              : "自动监测已关闭，仍可手动采集"}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="run-actions">
-                      {state?.busy || state?.paused ? (
-                        <button
-                          className="button"
-                          disabled={busy}
-                          onClick={() =>
-                            act(() =>
-                              api(state.paused ? "/resume" : "/pause", {}),
-                            )
-                          }
-                        >
-                          {state.paused ? (
-                            <Play size={15} />
-                          ) : (
-                            <Pause size={15} />
-                          )}{" "}
-                          {state.paused ? "继续监测" : "暂停"}
-                        </button>
-                      ) : null}
-                      <button
-                        className="button primary"
-                        disabled={busy || state?.busy}
-                        onClick={() => setRunOpen(!runOpen)}
-                      >
-                        <Play size={15} />
-                        {selected.length
-                          ? `采集 ${selected.length} 个问题`
-                          : "开始一轮"}
-                        <ChevronDown size={14} />
-                      </button>
-                    </div>
-                  </section>
-                  {latest && latest.total > 0 && (
-                    <div className="progress-track" aria-label="最近批次进度">
-                      <span
-                        style={{
-                          width: `${100 * ((latest.succeeded + latest.partial + latest.failed + latest.cancelled) / latest.total)}%`,
-                        }}
-                      />
-                    </div>
-                  )}
                   {runOpen && (
                     <section className="inline-panel run-config">
                       <div>
@@ -485,7 +432,7 @@ export default function App() {
                       </div>
                       <button
                         className="button primary"
-                        disabled={busy || !platforms.length}
+                        disabled={busy || !platforms.length || !state?.controls.start.enabled || !questions.some(q=>q.enabled && (!selected.length || selected.includes(q.id)))}
                         onClick={async () => {
                           if (
                             await act(
@@ -868,14 +815,40 @@ export default function App() {
               )}
             </>
           )}
-        </div>
+        </fieldset>
         <footer className="page-footer">
           <span>seegeo · 回答与来源档案</span>
           <span>Asia/Shanghai · 数据保存在你的 Mac</span>
         </footer>
       </main>
     </div>
+    </OperationContext.Provider>
   );
+}
+
+function TaskToolbar({state,busy,selected,act,onStart}:{state:State|null;busy:boolean;selected:number;act:Act;onStart:()=>void}) {
+  const batch=state?.displayBatch,active=state?.activeBatch;
+  const status=active?.control_state || (batch?.control_state === "cancelled" ? "cancelled" : batch ? "completed" : "idle");
+  const names:Record<string,string>={running:"正在监测",pausing:"正在暂停…",paused:"已暂停",waiting:"需要人工处理",cancelling:"正在取消…",cancelled:"已取消",completed:"本轮已结束",idle:"准备开始监测"};
+  const task=state?.currentItem || state?.pausedTask;
+  const completed=batch ? batch.succeeded+batch.partial+batch.failed+batch.cancelled : 0;
+  const resume=status === "paused" || status === "waiting";
+  const control=state?.controls[resume ? "resume" : "pause"];
+  return <section className={`task-toolbar ${active ? "has-task" : ""}`} aria-label="任务控制">
+    <div className="task-main">
+      <div className={`task-indicator ${status}`} aria-hidden="true">{["running","pausing","cancelling"].includes(status) ? <LoaderCircle size={18} className="spin"/> : status === "paused" ? <Pause size={18}/> : status === "cancelled" ? <X size={18}/> : <Clock3 size={18}/>}</div>
+      <div className="task-copy"><div className="task-title"><strong>{names[status] || status}</strong>{batch && <span>第 {batch.id} 轮 · {completed} / {batch.total} 项</span>}</div>
+      <p title={task?.question_text}>{task && active ? `${platformNames[task.platform]} · ${task.question_text}` : batch ? `${batch.succeeded} 项成功 · ${batch.partial} 项来源待核对 · ${batch.failed} 项失败${batch.cancelled ? ` · ${batch.cancelled} 项取消` : ""}` : state?.schedule.enabled ? `下次计划 ${fmt(state.nextRun)} · 北京时间` : "自动监测已关闭，可手动开始"}</p></div>
+    </div>
+    <div className="task-controls">
+      <button className="button" disabled={busy || !control?.enabled} title={control?.reason || (resume ? "先恢复暂停问题的原会话" : "保留当前进度")} onClick={() => act(() => api(resume ? "/resume" : "/pause",{}))}>{resume ? <Play size={14}/> : <Pause size={14}/>} {resume ? "继续监测" : "暂停监测"}</button>
+      <button className="button cancel-control" disabled={busy || !state?.controls.cancel.enabled} title={state?.controls.cancel.reason || "停止本轮，保留已完成结果"} onClick={() => act(() => api(`/batches/${active?.id}/cancel`,{}),"本轮已取消，已完成结果保留")}><X size={14}/>取消监测</button>
+      {!active && batch && <button className="button" disabled={busy || !state?.controls.rerun.enabled} title={state?.controls.rerun.reason || "按本轮原问题版本和平台范围重跑"} onClick={() => act(() => api(`/batches/${batch.id}/rerun`,{}),"已创建新批次，历史记录保留")}><RotateCcw size={14}/>重新运行本轮</button>}
+      <button className="button primary" disabled={busy || !state?.controls.start.enabled} title={state?.controls.start.reason || "选择本轮问题与平台"} onClick={onStart}><Plus size={15}/>{selected ? `监测 ${selected} 个问题` : "开始一轮"}</button>
+    </div>
+    {batch && <div className="task-progress" role="progressbar" aria-label="批次进度" aria-valuemin={0} aria-valuemax={batch.total} aria-valuenow={completed}><span style={{width:`${batch.total ? completed/batch.total*100 : 0}%`}}/></div>}
+    {active && <p className="task-hint">{status === "paused" ? "继续时优先恢复暂停项；取消本轮后可开始新一轮。" : status === "waiting" ? "在运行设置中完成登录或验证，再继续监测。" : "每题独立对话，串行采集。取消会保留已经完成的回答和来源。"}</p>}
+  </section>;
 }
 
 type Act = (fn: () => Promise<unknown>, message?: string) => Promise<boolean>;
@@ -1037,6 +1010,7 @@ function Sources({
   );
 }
 function Answer({ task, act }: { task: Task | undefined; act: Act }) {
+  const {busy,state}=useContext(OperationContext);
   if (!task)
     return <div className="empty-answer">这个平台还没有采集记录。</div>;
   return (
@@ -1063,17 +1037,12 @@ function Answer({ task, act }: { task: Task | undefined; act: Act }) {
       </article>
       <div className="answer-tools">
         {task.conversation_url && (
-          <a
-            className="text-button"
-            href={task.conversation_url}
-            target="_blank"
-            rel="noreferrer"
-          >
-            查看原会话
-            <ExternalLink size={13} />
-          </a>
+          <button className="text-button" disabled={busy} onClick={() => act(() => api(`/tasks/${task.id}/open`, {}),"已在该平台的独立 Chrome 中打开原会话")}>
+            查看原会话 <ExternalLink size={13} />
+          </button>
         )}
         {[
+          "paused",
           "uncertain",
           "partial",
           "waiting_verification",
@@ -1081,6 +1050,8 @@ function Answer({ task, act }: { task: Task | undefined; act: Act }) {
         ].includes(task.status) && (
           <button
             className="text-button"
+            disabled={busy || state?.busy || !task.conversation_url || !task.mode}
+            title={state?.busy ? "请先暂停监测" : !task.conversation_url || !task.mode ? "此项尚未保存原会话或模式，使用顶部继续监测" : "核对原问题并收取已有回答"}
             onClick={() =>
               act(
                 () => api(`/tasks/${task.id}/recover`, {}),
@@ -1097,17 +1068,9 @@ function Answer({ task, act }: { task: Task | undefined; act: Act }) {
         ) && (
           <button
             className="text-button"
-            onClick={() => {
-              if (
-                window.confirm(
-                  "将在新对话中重新采集，原结果保留。请先核对原会话，确认需要重采。",
-                )
-              )
-                void act(
-                  () => api(`/tasks/${task.id}/retry`, {}),
-                  "已创建重采批次；点击继续监测开始",
-                );
-            }}
+            disabled={busy || !state?.controls.start.enabled}
+            title={!state?.controls.start.enabled ? "请先完成或取消当前批次" : "在新批次采集，原结果保留"}
+            onClick={() => act(() => api(`/tasks/${task.id}/retry`, {}),"重采批次已开始，原结果保留")}
           >
             <Play size={13} />
             另开对话重采
@@ -1472,21 +1435,9 @@ function Records({
             完成 {state.batches[0].succeeded} / {state.batches[0].total} ·
             待处理 {state.batches[0].waiting}
           </p>
-          {!state.batches[0].finished_at && (
-            <button
-              className="button"
-              onClick={() =>
-                act(
-                  () => api(`/batches/${state.batches[0].id}/cancel`, {}),
-                  "未完成任务已取消",
-                )
-              }
-            >
-              取消本轮剩余任务
-            </button>
-          )}
         </div>
       )}
+      {batch && state && <div className="history-actions"><button className="button" disabled={!state.controls.rerun.enabled} title={state.controls.rerun.reason || "使用原问题版本和平台范围创建新批次"} onClick={() => act(() => api(`/batches/${batch}/rerun`,{}),"已按原批次范围重新开始")}><RotateCcw size={15}/>重新运行所选批次</button></div>}
       <div className="filters record-filters">
         <select
           aria-label="采集批次"
@@ -1606,6 +1557,8 @@ function Records({
   );
 }
 function Settings({ state, act }: { state: State; act: Act }) {
+  const {busy}=useContext(OperationContext);
+  const [exited,setExited]=useState(false);
   const [schedule, setSchedule] = useState(state.schedule),
     [auto, setAuto] = useState(state.allowAutoSearch),
     [notifications, setNotifications] = useState(state.notifications);
@@ -1750,6 +1703,8 @@ function Settings({ state, act }: { state: State; act: Act }) {
               <div className="row-actions">
                 <button
                   className="button"
+                  disabled={busy || state.busy}
+                  title={state.busy ? "请先暂停监测，再打开登录窗口" : "使用独立 Chrome 登录态"}
                   onClick={() =>
                     act(
                       () => api(`/platforms/${p.id}/login`, {}),
@@ -1766,7 +1721,7 @@ function Settings({ state, act }: { state: State; act: Act }) {
                     onClick={() =>
                       act(
                         () => api(`/platforms/${p.id}/resume`, {}),
-                        "已处理登录状态；已提交的问题仍需在详情核对原会话",
+                        state.paused ? "已解除平台等待；点击顶部继续监测恢复本轮" : "平台已恢复，优先检查原会话",
                       )
                     }
                   >
@@ -1806,27 +1761,18 @@ function Settings({ state, act }: { state: State; act: Act }) {
         </p>
         <div className="row-actions align-start">
           <button
-            className="button"
-            onClick={() =>
-              act(() => api(state.paused ? "/resume" : "/pause", {}))
-            }
-          >
-            {state.paused ? <Play size={15} /> : <Pause size={15} />}{" "}
-            {state.paused ? "继续监测" : "暂停监测"}
-          </button>
-          <button
             className="button danger"
             onClick={() => {
               if (
                 window.confirm(
-                  "退出本机服务？正在生成的回答会标记为需要核对，下次启动后可恢复。",
+                  "退出本机服务？未完成任务会保持暂停，下次启动后可继续。",
                 )
               )
-                void api("/shutdown", {}).then(() => window.location.reload());
+                void act(() => api("/shutdown", {}),"服务已退出，下次请重新启动").then(ok=>{if(ok)setExited(true);});
             }}
           >
             <Power size={15} />
-            退出服务
+            {exited ? "服务已退出" : "退出服务"}
           </button>
         </div>
       </section>
