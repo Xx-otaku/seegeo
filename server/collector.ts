@@ -53,11 +53,43 @@ export async function checkAccess(page: Page) {
   if (await visible(page.getByRole("dialog").filter({ hasText: /登录|扫码/ })))
     throw new CollectorError("登录已失效，请在采集窗口重新登录", "login");
 }
-export async function isComplete(page:Page,p:Platform):Promise<boolean>{
- if(await visible(page.locator(selectors[p].stop)))return false;
- if(p==='deepseek')return visible(page.locator('.ds-message:has(.ds-assistant-message-main-content)').last().locator('..').getByRole('button',{name:'朗读',exact:true}));
- if(p==='doubao')return await page.locator(selectors[p].answer).last().getAttribute('data-streaming')==='false'&&await visible(page.locator('[data-testid="receive_message"]').last().locator('[data-testid="message_action_copy"]'));
- return await page.locator('[data-conv-speaker="ai"][data-conv-outputting="false"] .hyc-content-md-done').count()>0&&await visible(page.locator('[data-conv-speaker="ai"]').last().locator('[aria-label="复制"]').first());
+export async function isComplete(page: Page, p: Platform): Promise<boolean> {
+  if (await visible(page.locator(selectors[p].stop))) return false;
+  if (p === "deepseek")
+    return visible(
+      page
+        .locator(".ds-message:has(.ds-assistant-message-main-content)")
+        .last()
+        .locator("..")
+        .getByRole("button", { name: "朗读", exact: true }),
+    );
+  if (p === "doubao")
+    return (
+      (await page
+        .locator(selectors[p].answer)
+        .last()
+        .getAttribute("data-streaming")) === "false" &&
+      (await visible(
+        page
+          .locator('[data-testid="receive_message"]')
+          .last()
+          .locator('[data-testid="message_action_copy"]'),
+      ))
+    );
+  return (
+    (await page
+      .locator(
+        '[data-conv-speaker="ai"][data-conv-outputting="false"] .hyc-content-md-done',
+      )
+      .count()) > 0 &&
+    (await visible(
+      page
+        .locator('[data-conv-speaker="ai"]')
+        .last()
+        .locator('[aria-label="复制"]')
+        .first(),
+    ))
+  );
 }
 async function toggle(locator: Locator, target: boolean, name: string) {
   if (!(await visible(locator)))
@@ -311,7 +343,7 @@ export async function extractSources(
     const chips = answer.locator('span[class*="container-sWvQla"]');
     let unresolved = false;
     for (let i = 0; i < (await chips.count()); i++) {
-      await page.mouse.click(5,5);
+      await page.mouse.click(5, 5);
       await page.waitForTimeout(500);
       await chips.nth(i).hover();
       await page.waitForTimeout(700);
@@ -319,7 +351,7 @@ export async function extractSources(
         .locator('.semi-popover-wrapper-show[role="tooltip"]')
         .last();
       try {
-        if(!await visible(pop))await chips.nth(i).click();
+        if (!(await visible(pop))) await chips.nth(i).click();
         await pop.waitFor({ state: "visible", timeout: 3000 });
         await page.waitForTimeout(400);
         const title = await pop.locator('[class^="title-"]').innerText();
@@ -422,7 +454,7 @@ export async function extractSources(
         site: u.hostname,
         snippet: link.snippet.slice(0, 3000),
         marker: link.marker,
-        passage:link.passage,
+        passage: link.passage,
         order: sources.filter((s) => s.kind === kind).length + 1,
       });
     }
@@ -502,8 +534,16 @@ export async function extractSources(
           s.marker = card.marker;
         }
       }
-      const expected=Number((await trigger.innerText()).match(/\d+/)?.[0]||0);
-      if((expected&&cards.length!==expected)||sources.some(s=>s.kind==='citation'&&!cards.some(c=>c.url===s.url)))return {sources,status:'failed',searched:true};
+      const expected = Number(
+        (await trigger.innerText()).match(/\d+/)?.[0] || 0,
+      );
+      if (
+        (expected && cards.length !== expected) ||
+        sources.some(
+          (s) => s.kind === "citation" && !cards.some((c) => c.url === s.url),
+        )
+      )
+        return { sources, status: "failed", searched: true };
     } else {
       const panel = page.locator(
         '[role="dialog"], [class*="search-reference"], [class*="search-result"], [class*="reference-panel"]',
@@ -587,7 +627,7 @@ export async function collect(
       stable = text && text === previous ? stable + 1 : 0;
       previous = text;
       // A platform completion toolbar is required; text stability alone is insufficient.
-      const done = await isComplete(page,p);
+      const done = await isComplete(page, p);
       if (text && stable >= 3 && !generating && done) break;
       await page.waitForTimeout(2000);
     }
@@ -604,7 +644,15 @@ export async function collect(
           ...mode,
         },
       );
-    if(previous.trim().length<80&&/^(服务器繁忙|服务繁忙|网络异常|请求失败|系统繁忙)/.test(previous.trim()))throw new CollectorError('平台返回服务错误：'+previous.trim(),'uncertain',true);
+    if (
+      previous.trim().length < 80 &&
+      /^(服务器繁忙|服务繁忙|网络异常|请求失败|系统繁忙)/.test(previous.trim())
+    )
+      throw new CollectorError(
+        "平台返回服务错误：" + previous.trim(),
+        "uncertain",
+        true,
+      );
     const human = page.locator(selectors[p].human);
     const texts = await human.allInnerTexts();
     if (!userConfirmed && !texts.some((t) => t.trim() === question.trim()))
@@ -680,7 +728,7 @@ export async function recoverExisting(
   const answer = page.locator(selectors[p].answer).last();
   if (!(await visible(answer))) await answer.scrollIntoViewIfNeeded();
   if (
-    !await isComplete(page,p)||
+    !(await isComplete(page, p)) ||
     (await visible(page.locator(selectors[p].stop))) ||
     (p === "doubao" &&
       (await answer.getAttribute("data-streaming")) !== "false") ||

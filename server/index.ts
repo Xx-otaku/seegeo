@@ -111,7 +111,11 @@ app.get("/api/questions", () => {
       .filter(Boolean),
   }));
 });
-app.get<{Params:{id:string}}>('/api/questions/:id',req=>{const question=store.question(id(req.params.id));if(!question)throw new Error('问题不存在');return question;});
+app.get<{ Params: { id: string } }>("/api/questions/:id", (req) => {
+  const question = store.question(id(req.params.id));
+  if (!question) throw new Error("问题不存在");
+  return question;
+});
 app.post("/api/questions/import", (req) => {
   const body = z
     .object({
@@ -148,7 +152,7 @@ app.delete<{ Params: { id: string } }>("/api/questions/:id", (req) => {
   return { ok: true };
 });
 app.get("/api/results", (req) =>
-  store.tasks({...filters(req.query),limit:500}),
+  store.tasks({ ...filters(req.query), limit: 500 }),
 );
 app.get<{ Params: { id: string } }>("/api/results/:id", (req) => {
   const task = store.task(id(req.params.id));
@@ -201,7 +205,7 @@ app.post<{ Params: { id: string } }>("/api/batches/:id/cancel", (req) => {
         error: t.status === "uncertain" ? "用户取消；原会话可能仍有回答" : null,
       });
   runner.finishBatch(batchId);
-  for(const p of platformIds)runner.releasePlatform(p);
+  for (const p of platformIds) runner.releasePlatform(p);
   return { ok: true };
 });
 app.post<{ Params: { platform: string } }>(
@@ -209,8 +213,13 @@ app.post<{ Params: { platform: string } }>(
   async (req) => {
     const p = platformSchema.parse(req.params.platform);
     if (runner.busy) throw new Error("请先暂停任务，避免登录操作影响当前会话");
-    runner.busy=true;
-    try{await runner.browsers.login(p);return {ok:true};}finally{runner.busy=false;}
+    runner.busy = true;
+    try {
+      await runner.browsers.login(p);
+      return { ok: true };
+    } finally {
+      runner.busy = false;
+    }
   },
 );
 app.post<{ Params: { platform: string } }>(
@@ -318,20 +327,18 @@ app.get<{ Params: { format: string } }>(
       `attachment; filename="seegeo-${format}"`,
     );
     if (format === "results.json")
-      return reply
-        .type("application/json; charset=utf-8")
-        .send(
-          JSON.stringify(
-            {
-              schemaVersion: 1,
-              exportedAt: new Date().toISOString(),
-              batches: store.batches(),
-              results: tasks.map(({ answer_html, ...t }) => t),
-            },
-            null,
-            2,
-          ),
-        );
+      return reply.type("application/json; charset=utf-8").send(
+        JSON.stringify(
+          {
+            schemaVersion: 1,
+            exportedAt: new Date().toISOString(),
+            batches: store.batches(),
+            results: tasks.map(({ answer_html, ...t }) => t),
+          },
+          null,
+          2,
+        ),
+      );
     return reply
       .type("text/csv; charset=utf-8")
       .send(format === "answers.csv" ? answersCSV(tasks) : sourcesCSV(tasks));

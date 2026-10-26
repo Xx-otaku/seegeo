@@ -78,10 +78,36 @@ export class Store {
       )
       .all() as unknown as Question[];
   }
-  question(id:number) {return this.db.prepare('SELECT * FROM questions WHERE id=?').get(id) as unknown as Question|undefined;}
-  latestResults() {return this.db.prepare('SELECT id,question_id,platform,status,finished_at,source_status,json_array_length(sources) sources_count FROM tasks WHERE id IN (SELECT MAX(id) FROM tasks GROUP BY question_id,platform)').all();}
-  waitingCount(platform:Platform) {return Number(this.db.prepare("SELECT COUNT(*) count FROM tasks WHERE platform=? AND status IN ('waiting_login','waiting_verification','uncertain')").get(platform)!.count);}
-  hasUnfinished() {return Boolean(this.db.prepare("SELECT 1 FROM tasks WHERE status IN ('pending','running','waiting_login','waiting_verification','uncertain') LIMIT 1").get());}
+  question(id: number) {
+    return this.db
+      .prepare("SELECT * FROM questions WHERE id=?")
+      .get(id) as unknown as Question | undefined;
+  }
+  latestResults() {
+    return this.db
+      .prepare(
+        "SELECT id,question_id,platform,status,finished_at,source_status,json_array_length(sources) sources_count FROM tasks WHERE id IN (SELECT MAX(id) FROM tasks GROUP BY question_id,platform)",
+      )
+      .all();
+  }
+  waitingCount(platform: Platform) {
+    return Number(
+      this.db
+        .prepare(
+          "SELECT COUNT(*) count FROM tasks WHERE platform=? AND status IN ('waiting_login','waiting_verification','uncertain')",
+        )
+        .get(platform)!.count,
+    );
+  }
+  hasUnfinished() {
+    return Boolean(
+      this.db
+        .prepare(
+          "SELECT 1 FROM tasks WHERE status IN ('pending','running','waiting_login','waiting_verification','uncertain') LIMIT 1",
+        )
+        .get(),
+    );
+  }
   importQuestions(items: { text: string; group_name?: string }[]) {
     return this.transaction(() => {
       let added = 0,
@@ -166,7 +192,7 @@ export class Store {
       status?: string;
       from?: string;
       to?: string;
-      limit?:number;
+      limit?: number;
     } = {},
   ) {
     const clauses: string[] = [],
@@ -191,7 +217,7 @@ export class Store {
     }
     return this.db
       .prepare(
-        `SELECT * FROM tasks ${clauses.length ? "WHERE " + clauses.join(" AND ") : ""} ORDER BY id DESC${filters.limit?' LIMIT '+Math.max(1,Math.min(1000,Math.floor(filters.limit))):''}`,
+        `SELECT * FROM tasks ${clauses.length ? "WHERE " + clauses.join(" AND ") : ""} ORDER BY id DESC${filters.limit ? " LIMIT " + Math.max(1, Math.min(1000, Math.floor(filters.limit))) : ""}`,
       )
       .all(...params)
       .map((row) => ({
@@ -201,10 +227,23 @@ export class Store {
       })) as unknown as Task[];
   }
   task(id: number) {
-    const row=this.db.prepare('SELECT * FROM tasks WHERE id=?').get(id);
-    return row?{...row,sources:JSON.parse(String(row.sources)),mode:row.mode?JSON.parse(String(row.mode)):null} as unknown as Task:undefined;
+    const row = this.db.prepare("SELECT * FROM tasks WHERE id=?").get(id);
+    return row
+      ? ({
+          ...row,
+          sources: JSON.parse(String(row.sources)),
+          mode: row.mode ? JSON.parse(String(row.mode)) : null,
+        } as unknown as Task)
+      : undefined;
   }
-  nextPending(blocked:string[]) {const row=this.db.prepare(`SELECT id FROM tasks WHERE status='pending'${blocked.length?' AND platform NOT IN ('+blocked.map(()=>'?').join(',')+')':''} ORDER BY id LIMIT 1`).get(...blocked);return row?this.task(Number(row.id)):undefined;}
+  nextPending(blocked: string[]) {
+    const row = this.db
+      .prepare(
+        `SELECT id FROM tasks WHERE status='pending'${blocked.length ? " AND platform NOT IN (" + blocked.map(() => "?").join(",") + ")" : ""} ORDER BY id LIMIT 1`,
+      )
+      .get(...blocked);
+    return row ? this.task(Number(row.id)) : undefined;
+  }
   patchTask(id: number, patch: Partial<Omit<Task, "id">>) {
     const allowed = new Set([
       "status",
