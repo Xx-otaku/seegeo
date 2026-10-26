@@ -1,6 +1,6 @@
 import { BrowserPool } from "./browser.js";
 import { platformIds, type Platform } from "./types.js";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { dataDir } from "./config.js";
 import Fastify from "fastify";
@@ -12,47 +12,11 @@ const chosen =
 for (const platform of chosen) {
   if (!platformIds.includes(platform))
     throw new Error("平台须为 doubao / deepseek / yuanbao / all");
-  const page = await pool.login(platform);
+  await pool.login(platform);
   console.log(`已打开 ${platform}，请在独立 Chrome 窗口中手动登录。`);
-  const dir = join(dataDir, "diagnostics");
-  mkdirSync(dir, { recursive: true });
-  setInterval(async () => {
-    if (page.isClosed()) return;
-    try {
-      writeFileSync(
-        join(dir, `probe-${platform}.json`),
-        JSON.stringify(
-          {
-            url: page.url(),
-            text: await page.locator("body").innerText(),
-            elements: await page
-              .locator(
-                "textarea, [contenteditable=true], button, [role=button], [data-testid]",
-              )
-              .evaluateAll((els) =>
-                els.map((el) => ({
-                  tag: el.tagName,
-                  testid: el.getAttribute("data-testid"),
-                  role: el.getAttribute("role"),
-                  label: el.getAttribute("aria-label"),
-                  pressed: el.getAttribute("aria-pressed"),
-                  state: el.getAttribute("data-state"),
-                  placeholder: el.getAttribute("placeholder"),
-                  cls: el.className,
-                  text: (el.textContent || "").slice(0, 180),
-                })),
-              ),
-          },
-          null,
-          2,
-        ),
-        { mode: 0o600 },
-      );
-    } catch {}
-  }, 10000).unref();
 }
 console.log(
-  "登录窗口保持打开。Ctrl+C 退出验证工具。页面快照仅保存在本机诊断目录。",
+  "登录窗口保持打开。Ctrl+C 退出验证工具；仅在主动采集时保存本机结果。",
 );
 const api = Fastify();
 api.addHook("onRequest", async (req, reply) => {
@@ -84,7 +48,7 @@ api.post<{
     });
   return {
     url: page.url(),
-    text: (await page.locator("body").innerText()).slice(-14000),
+    text: (await page.locator(req.params.platform === "doubao" ? '[data-testid="message-list"], [data-testid="chat_input"]' : req.params.platform === "deepseek" ? ' .ds-message, .ds-toggle-button, textarea' : '[data-conv-speaker], .ql-editor, #chatReferenceList').allInnerTexts()).join("\n").slice(-14000),
     html: req.body.selector
       ? await page
           .locator(req.body.selector)
@@ -95,6 +59,7 @@ api.post<{
 api.post<{ Params: { platform: Platform }; Body: { question: string } }>(
   "/capture/:platform",
   async (req) => {
+    if (!platformIds.includes(req.params.platform)) throw new Error("未知平台");
     const moduleUrl = new URL("./collector.ts", import.meta.url);
     moduleUrl.searchParams.set("v", String(Date.now()));
     const { collect } = await import(moduleUrl.href);

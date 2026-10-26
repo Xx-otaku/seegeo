@@ -1,0 +1,209 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-26T11:21:27.772124+00:00",
+  "title": "Design System: seegeo",
+  "extensions": {
+    "colorMeta": {
+      "pine": {
+        "role": "primary",
+        "displayName": "深松绿"
+      },
+      "green": {
+        "role": "primary",
+        "displayName": "操作绿"
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "阅读白"
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "工作区近白"
+      },
+      "task-surface": {
+        "role": "neutral",
+        "displayName": "浅草绿任务面"
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "浅绿分隔线"
+      },
+      "danger": {
+        "role": "primary",
+        "displayName": "危险红"
+      },
+      "amber": {
+        "role": "primary",
+        "displayName": "提醒琥珀"
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "页面标题",
+        "purpose": "工作页标题；阅读页问题标题有局部尺寸覆盖。"
+      },
+      "reading": {
+        "displayName": "回答正文",
+        "purpose": "保留换行的长回答阅读。"
+      },
+      "label": {
+        "displayName": "紧凑标签",
+        "purpose": "表头与元数据。"
+      }
+    },
+    "shadows": [
+      {
+        "name": "segmented-active",
+        "value": "0 1px 3px #293f1f10",
+        "purpose": "分段控件选中项。"
+      },
+      {
+        "name": "toast",
+        "value": "0 6px 24px #143d3620",
+        "purpose": "完成提示浮层。"
+      }
+    ],
+    "motion": [
+      {
+        "name": "control-transition",
+        "value": "0.15s",
+        "purpose": "按钮背景/边线、导航背景、开关背景与位移。"
+      },
+      {
+        "name": "progress-transition",
+        "value": "width 0.4s",
+        "purpose": "进度条宽度。"
+      },
+      {
+        "name": "running-spin",
+        "value": "spin 1.5s linear infinite",
+        "purpose": "采集中旋转图标；减弱动效模式禁用。"
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "wide-min",
+        "value": "1600px"
+      },
+      {
+        "name": "compact-max",
+        "value": "1200px"
+      },
+      {
+        "name": "rail-max",
+        "value": "900px"
+      },
+      {
+        "name": "bottom-nav-max",
+        "value": "600px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "主要按钮",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "开始采集、保存等主操作。",
+      "html": "<button class=\"ds-button ds-primary\">开始一轮</button>",
+      "css": ".ds-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;background:white;border:1px solid #cfd8cd;border-radius:6px;padding:10px 14px;font-size:12px;line-height:18px;white-space:nowrap;cursor:pointer;transition:background .15s,border-color .15s;font-family:\"Avenir Next\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;}.ds-button:hover:not(:disabled){background:#eef3e9;border-color:#b3c4b0}.ds-button:focus-visible{outline:2px solid var(--focus, #498167);outline-offset:3px}.ds-button:disabled{cursor:not-allowed;opacity:.5}.ds-primary{color:var(--paper, #fff);background:var(--green, #226b53);border-color:var(--green, #226b53)}.ds-primary:hover:not(:disabled){background:#18563f}@media(prefers-reduced-motion:reduce){.ds-button,.ds-nav-item{transition:none!important}}"
+    },
+    {
+      "name": "次要按钮",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "导入、取消等普通操作。",
+      "html": "<button class=\"ds-button\">导入问题</button>",
+      "css": ".ds-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;background:white;border:1px solid #cfd8cd;border-radius:6px;padding:10px 14px;font-size:12px;line-height:18px;white-space:nowrap;cursor:pointer;transition:background .15s,border-color .15s;font-family:\"Avenir Next\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;}.ds-button:hover:not(:disabled){background:#eef3e9;border-color:#b3c4b0}.ds-button:focus-visible{outline:2px solid var(--focus, #498167);outline-offset:3px}.ds-button:disabled{cursor:not-allowed;opacity:.5}@media(prefers-reduced-motion:reduce){.ds-button,.ds-nav-item{transition:none!important}}"
+    },
+    {
+      "name": "危险按钮",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "退出服务等危险操作。",
+      "html": "<button class=\"ds-button ds-danger\">退出服务</button>",
+      "css": ".ds-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;background:white;border:1px solid #cfd8cd;border-radius:6px;padding:10px 14px;font-size:12px;line-height:18px;white-space:nowrap;cursor:pointer;transition:background .15s,border-color .15s;font-family:\"Avenir Next\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;}.ds-button:hover:not(:disabled){background:#eef3e9;border-color:#b3c4b0}.ds-button:focus-visible{outline:2px solid var(--focus, #498167);outline-offset:3px}.ds-button:disabled{cursor:not-allowed;opacity:.5}.ds-danger{color:var(--danger, #9b3c35)}@media(prefers-reduced-motion:reduce){.ds-button,.ds-nav-item{transition:none!important}}"
+    },
+    {
+      "name": "文本按钮",
+      "kind": "button",
+      "refersTo": "button-text",
+      "description": "轻量链接式操作。",
+      "html": "<button class=\"ds-text\">添加问题</button>",
+      "css": ".ds-text{display:inline-flex;align-items:center;gap:5px;font-size:12px;line-height:1.5;color:var(--green, #226b53);border:0;background:none;padding:0;cursor:pointer;font-family:\"Avenir Next\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;}.ds-text:hover{color:#103f30;text-decoration:underline}.ds-text:focus-visible{outline:2px solid var(--focus, #498167);outline-offset:3px}"
+    },
+    {
+      "name": "搜索输入",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "包含清除操作的搜索框。",
+      "html": "<label class=\"ds-search\"><svg aria-hidden=\"true\" width=\"17\" height=\"17\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"11\" cy=\"11\" r=\"8\"/><path d=\"m21 21-4.35-4.35\"/></svg><input aria-label=\"搜索问题或分组\" placeholder=\"搜索问题或分组\"/></label>",
+      "css": ".ds-search{display:flex;align-items:center;gap:8px;background:white;border:1px solid #ced7ce;border-radius:6px;padding:0 11px;min-width:220px;max-width:420px;color:#81917f;font-family:\"Avenir Next\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;}.ds-search input{border:0;padding:8px 0;min-height:36px;outline:none;width:100%;min-width:0;font:inherit;font-size:12px;color:#263b32;caret-color:var(--green, #226b53)}.ds-search input::placeholder{color:#62715e}.ds-search:focus-within{outline:2px solid #498167;outline-offset:1px}"
+    },
+    {
+      "name": "导航项",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "深松绿区域中的当前与普通入口。",
+      "html": "<nav class=\"ds-nav\" aria-label=\"主导航\"><button class=\"ds-nav-item ds-active\">问题库</button><button class=\"ds-nav-item\">采集记录</button></nav>",
+      "css": ".ds-nav{display:flex;flex-direction:column;gap:7px;background:var(--pine, #143d36);padding:18px;width:184px;font-family:\"Avenir Next\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;}.ds-nav-item{display:flex;align-items:center;gap:12px;padding:12px 15px;border:0;border-radius:6px;background:none;color:#cfddd3;text-align:left;font:inherit;font-size:14px;cursor:pointer;transition:background .15s}.ds-nav-item:hover{background:#214c43}.ds-nav-item.ds-active{color:#f5ffed;background:#2d5548}.ds-nav-item:focus-visible{outline:2px solid var(--focus, #498167);outline-offset:3px}@media(prefers-reduced-motion:reduce){.ds-button,.ds-nav-item{transition:none!important}}"
+    },
+    {
+      "name": "状态徽章",
+      "kind": "chip",
+      "refersTo": "badge",
+      "description": "以文字与色面表达完成、失败与待处理。",
+      "html": "<div class=\"ds-badges\"><span class=\"ds-badge ds-success\"><i></i>已完成</span><span class=\"ds-badge ds-warn\"><i></i>需要登录</span><span class=\"ds-badge ds-fail\"><i></i>采集失败</span></div>",
+      "css": ".ds-badges{display:flex;gap:8px;flex-wrap:wrap;font-family:\"Avenir Next\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;}.ds-badge{display:inline-flex;align-items:center;gap:5px;font-size:10px;padding:4px 7px;background:#eef1eb;color:#60715d;border-radius:4px;white-space:nowrap}.ds-badge i{width:4px;height:4px;border-radius:50%;background:currentColor}.ds-success{color:#336f45;background:#edf5e9}.ds-warn{color:#90611e;background:#fff3df}.ds-fail{color:#9a3e38;background:#faece9}"
+    },
+    {
+      "name": "阅读面",
+      "kind": "card",
+      "refersTo": "reading-card",
+      "description": "长回答的白色内容面。",
+      "html": "<article class=\"ds-reading\"><p class=\"ds-answer\">回答正文保留原始换行，在宽松行距中阅读。\n引用与来源位于正文之后。</p></article>",
+      "css": ".ds-reading{background:white;border:1px solid var(--line, #e2e7df);border-radius:8px;padding:31px 36px;font-family:\"Avenir Next\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;}.ds-answer{font-size:14px;white-space:pre-wrap;line-height:1.95;margin:27px 0;color:#29372a;overflow-wrap:anywhere;max-width:78ch}@media(max-width:600px){.ds-reading{padding:19px}.ds-answer{font-size:13px;line-height:1.9}}"
+    },
+    {
+      "name": "采集状态条",
+      "kind": "custom",
+      "refersTo": "run-strip",
+      "description": "浅绿运行面与右侧主操作。",
+      "html": "<section class=\"ds-run\"><div><strong>准备好下一轮监测</strong><p>自动监测已关闭，仍可手动采集</p></div><button class=\"ds-button ds-primary\">开始一轮</button></section>",
+      "css": ".ds-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;background:white;border:1px solid #cfd8cd;border-radius:6px;padding:10px 14px;font-size:12px;line-height:18px;white-space:nowrap;cursor:pointer;transition:background .15s,border-color .15s;font-family:\"Avenir Next\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;}.ds-button:hover:not(:disabled){background:#eef3e9;border-color:#b3c4b0}.ds-button:focus-visible{outline:2px solid var(--focus, #498167);outline-offset:3px}.ds-button:disabled{cursor:not-allowed;opacity:.5}.ds-primary{color:var(--paper, #fff);background:var(--green, #226b53);border-color:var(--green, #226b53)}.ds-primary:hover:not(:disabled){background:#18563f}.ds-run{display:flex;align-items:center;justify-content:space-between;gap:20px;background:#edf3e7;border:1px solid #dbe5d3;border-radius:8px;padding:21px 23px;font-family:\"Avenir Next\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;}.ds-run strong{font-size:14px;font-weight:600}.ds-run p{font-size:11px;color:#60745a;margin:5px 0 0;line-height:1.7}@media(max-width:600px){.ds-run{display:block;padding:16px}.ds-run .ds-button{margin-top:18px}}@media(prefers-reduced-motion:reduce){.ds-button,.ds-nav-item{transition:none!important}}"
+    },
+    {
+      "name": "正文差异面",
+      "kind": "custom",
+      "refersTo": "diff-surface",
+      "description": "新增行与移除行共享白色正文面。",
+      "html": "<article class=\"ds-diff\"><span>保持不变的正文</span><del>较早记录中的文字</del><ins>较新记录新增的文字</ins></article>",
+      "css": ".ds-diff{background:white;border:1px solid var(--line, #e2e7df);border-radius:8px;padding:28px 33px;white-space:pre-wrap;line-height:1.95;overflow-wrap:anywhere;font-size:14px;font-family:\"Avenir Next\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;}.ds-diff ins,.ds-diff del{display:block;text-decoration:none;padding:3px 8px;white-space:pre-wrap}.ds-diff ins{background:#e5f3de;color:#356431}.ds-diff del{background:#fae8e1;color:#94584d;text-decoration:line-through}@media(max-width:600px){.ds-diff{padding:18px;font-size:12px}}"
+    }
+  ],
+  "narrative": {
+    "northStar": "seegeo 工作界面",
+    "overview": "seegeo 是中文、Mac 桌面优先的本机操作面板。既有方向用深松绿导航、浅草绿任务区和近白阅读面组织工作，以细分隔线维持紧凑表格，以宽松行距承载长回答。\n\n界面语言具体、克制。主操作使用单一绿色，登录、验证和待核对状态使用琥珀色，失败使用红色；文字状态与图标共同表达含义。本文仅记录 src/style.css 与 src/App.tsx 已实现的设计。",
+    "keyCharacteristics": [
+      "深松绿固定导航与浅色工作面",
+      "紧凑问题表格、宽松长文阅读",
+      "绿色主操作与明确的文字状态",
+      "本机中文字体栈、细边框、轻圆角",
+      "桌面并排阅读，窄屏纵向与底部导航"
+    ],
+    "rules": [],
+    "dos": [
+      "Do 保留 Avenir Next → PingFang SC → Microsoft YaHei → sans-serif 的本机字体栈。",
+      "Do 使用白色阅读面和浅绿任务面区分内容与运行状态。",
+      "Do 给状态保留中文标签，登录等待、来源待核对、失败和完成各自可识别。",
+      "Do 在数据表容器内横向滚动，在长问题、回答和链接处允许换行。",
+      "Do 保留键盘焦点轮廓、文件输入焦点和减弱动效规则。"
+    ],
+    "donts": [
+      "Don't 引入宣传页式超大展示字、装饰插图或新的视觉身份。",
+      "Don't 把来源提取失败呈现为没有来源，或把未采集呈现为采集成功。",
+      "Don't 将普通内容容器改成重阴影悬浮卡片；现有主体通过色面和边框分层。",
+      "Don't 隐去桌面与手机布局中当前导航、问题和任务状态的含义。"
+    ]
+  }
+}
