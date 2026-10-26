@@ -1,5 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
-import { join } from "node:path";
+import { mkdirSync, chmodSync } from "node:fs";
+import { join, dirname } from "node:path";
 import { prepareDataDir, dataDir } from "./config.js";
 import {
   platformIds,
@@ -15,7 +16,17 @@ export class Store {
   private depth = 0;
   constructor(path?: string) {
     prepareDataDir();
-    this.db = new DatabaseSync(path || join(dataDir, "seegeo.sqlite"));
+    const databasePath = path || join(dataDir, "seegeo.sqlite");
+    this.db = new DatabaseSync(databasePath);
+    const version = Number(this.db.prepare("PRAGMA user_version").get()!.user_version);
+    if (version > 2) throw new Error("数据库版本高于当前程序，请升级程序");
+    if (version === 1 && databasePath !== ":memory:") {
+      const backupDir = join(dirname(databasePath), "backups");
+      mkdirSync(backupDir, { recursive: true, mode: 0o700 });
+      const backup = join(backupDir, `before-v2-${Date.now()}.sqlite`);
+      this.db.exec(`VACUUM INTO '${backup.replaceAll("'", "''")}'`);
+      chmodSync(backup, 0o600);
+    }
     this.db
       .exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;
       CREATE TABLE IF NOT EXISTS questions(id INTEGER PRIMARY KEY, text TEXT NOT NULL, group_name TEXT NOT NULL DEFAULT '', enabled INTEGER NOT NULL DEFAULT 1, version INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, deleted_at TEXT);
@@ -25,7 +36,22 @@ export class Store {
       CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY, type TEXT NOT NULL, message TEXT NOT NULL, created_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS validations(platform TEXT PRIMARY KEY, confirmed_at TEXT NOT NULL);
-      PRAGMA user_version=1;`);
+      `);
+    if (version < 2) this.transaction(() => {
+      this.db.exec(`
+        ALTER TABLE batches ADD COLUMN control_state TEXT NOT NULL DEFAULT 'running';
+        ALTER TABLE batches ADD COLUMN resume_task_id INTEGER;
+        ALTER TABLE batches ADD COLUMN parent_batch_id INTEGER;
+        ALTER TABLE tasks ADD COLUMN interruption_reason TEXT;
+        ALTER TABLE tasks ADD COLUMN interrupted_at TEXT;
+        CREATE TABLE task_attempts(id INTEGER PRIMARY KEY, task_id INTEGER NOT NULL REFERENCES tasks(id), kind TEXT NOT NULL, started_at TEXT NOT NULL, finished_at TEXT, outcome TEXT, phase TEXT, conversation_url TEXT, error TEXT);
+        UPDATE batches SET control_state='completed' WHERE finished_at IS NOT NULL;
+        UPDATE tasks SET status='paused',interruption_reason='manual_pause',interrupted_at=COALESCE(started_at,datetime('now')) WHERE status='uncertain' AND error='任务已暂停，需核对原会话后继续';
+        UPDATE batches SET control_state='paused',resume_task_id=(SELECT id FROM tasks WHERE batch_id=batches.id AND status='paused' ORDER BY interrupted_at DESC,id DESC LIMIT 1) WHERE finished_at IS NULL AND EXISTS(SELECT 1 FROM tasks WHERE batch_id=batches.id AND status='paused');
+        PRAGMA user_version=2;
+      `);
+      if (this.getSetting("paused")) this.db.exec("UPDATE batches SET control_state='paused' WHERE finished_at IS NULL");
+    });
     if (!this.getSetting("schedule"))
       this.setSetting("schedule", {
         enabled: true,
@@ -103,7 +129,7 @@ export class Store {
     return Boolean(
       this.db
         .prepare(
-          "SELECT 1 FROM tasks WHERE status IN ('pending','running','waiting_login','waiting_verification','uncertain') LIMIT 1",
+          "SELECT 1 FROM tasks WHERE status IN ('pending','running','paused','waiting_login','waiting_verification','uncertain') LIMIT 1",
         )
         .get(),
     );
@@ -236,13 +262,37 @@ export class Store {
         } as unknown as Task)
       : undefined;
   }
+  activeBatch() {
+    return this.batches().find((b) => !b.finished_at);
+  }
+  batch(id: number) { return this.batches().find((b) => b.id === id); }
+  setBatchState(id: number, state: string, resumeId?: number | null) {
+    this.db.prepare("UPDATE batches SET control_state=?,resume_task_id=COALESCE(?,resume_task_id) WHERE id=?").run(state, resumeId ?? null, id);
+  }
+  cloneBatch(id: number, taskId?: number) {
+    return this.transaction(() => {
+      const tasks = this.tasks({batchId:id}).filter(t => !taskId || t.id === taskId).reverse();
+      if (!tasks.length) throw new Error("批次不存在或没有任务");
+      const result = this.db.prepare("INSERT INTO batches(trigger,created_at,parent_batch_id) VALUES (?,?,?)").run(taskId ? "retry" : "rerun", new Date().toISOString(), id);
+      const next = Number(result.lastInsertRowid);
+      const insert = this.db.prepare("INSERT INTO tasks(batch_id,question_id,question_text,question_version,group_name,platform) VALUES (?,?,?,?,?,?)");
+      for (const t of tasks) insert.run(next,t.question_id,t.question_text,t.question_version,t.group_name,t.platform);
+      return next;
+    });
+  }
+  beginAttempt(taskId: number, kind: string) {
+    return Number(this.db.prepare("INSERT INTO task_attempts(task_id,kind,started_at) VALUES (?,?,?)").run(taskId,kind,new Date().toISOString()).lastInsertRowid);
+  }
+  endAttempt(id: number, outcome: string, task: Task, error?: string) {
+    this.db.prepare("UPDATE task_attempts SET finished_at=?,outcome=?,phase=?,conversation_url=?,error=? WHERE id=?").run(new Date().toISOString(),outcome,task.phase,task.conversation_url,error || null,id);
+  }
+  attempts(taskId: number) { return this.db.prepare("SELECT * FROM task_attempts WHERE task_id=? ORDER BY id").all(taskId); }
   nextPending(blocked: string[]) {
-    const row = this.db
-      .prepare(
-        `SELECT id FROM tasks WHERE status='pending'${blocked.length ? " AND platform NOT IN (" + blocked.map(() => "?").join(",") + ")" : ""} ORDER BY id LIMIT 1`,
-      )
-      .get(...blocked);
-    return row ? this.task(Number(row.id)) : undefined;
+    const batch = this.activeBatch();
+    if (!batch || !["running"].includes(String(batch.control_state))) return;
+    const tasks = this.tasks({batchId:Number(batch.id)}).reverse();
+    return tasks.filter(t => ["pending","paused"].includes(t.status) && !blocked.includes(t.platform))
+      .sort((a,b) => Number(b.id === batch.resume_task_id)-Number(a.id === batch.resume_task_id) || Number(b.status === "paused")-Number(a.status === "paused") || a.id-b.id)[0];
   }
   patchTask(id: number, patch: Partial<Omit<Task, "id">>) {
     const allowed = new Set([
@@ -260,6 +310,8 @@ export class Store {
       "finished_at",
       "error",
       "diagnostic",
+      "interruption_reason",
+      "interrupted_at",
     ]);
     const entries = Object.entries(patch).filter(([key]) => allowed.has(key));
     if (!entries.length) return;
@@ -298,13 +350,13 @@ export class Store {
   batches() {
     return this.db
       .prepare(
-        `SELECT b.*, COUNT(t.id) total, SUM(t.status='succeeded') succeeded, SUM(t.status='partial') partial, SUM(t.status='failed') failed, SUM(t.status IN ('waiting_login','waiting_verification','uncertain')) waiting, SUM(t.status='running') running, SUM(t.status='pending') pending, SUM(t.status='cancelled') cancelled FROM batches b LEFT JOIN tasks t ON t.batch_id=b.id GROUP BY b.id ORDER BY b.id DESC`,
+        `SELECT b.*, COUNT(t.id) total, SUM(t.status='succeeded') succeeded, SUM(t.status='partial') partial, SUM(t.status='failed') failed, SUM(t.status IN ('waiting_login','waiting_verification','uncertain')) waiting, SUM(t.status='paused') paused, SUM(t.status='running') running, SUM(t.status='pending') pending, SUM(t.status='cancelled') cancelled FROM batches b LEFT JOIN tasks t ON t.batch_id=b.id GROUP BY b.id ORDER BY b.id DESC`,
       )
       .all();
   }
   recover() {
     const running = this.tasks({ status: "running" });
-    for (const t of running)
+    for (const t of running) {
       this.patchTask(t.id, {
         status: ["submitting", "submitted", "extracting"].includes(t.phase)
           ? "uncertain"
@@ -312,7 +364,19 @@ export class Store {
         error: ["submitting", "submitted", "extracting"].includes(t.phase)
           ? "服务上次在提交或生成期间退出，请核对原会话后再恢复"
           : null,
+        interruption_reason: "unexpected_exit", interrupted_at: new Date().toISOString(),
       });
+      this.setBatchState(t.batch_id, "paused", t.id);
+      this.setSetting("paused", true);
+    }
+    this.db.exec("UPDATE task_attempts SET outcome='interrupted',finished_at=datetime('now') WHERE finished_at IS NULL");
+    for (const b of this.batches()) {
+      if (b.control_state === "pausing") this.setBatchState(Number(b.id),"paused");
+      if (b.control_state === "cancelling") {
+        this.db.prepare("UPDATE tasks SET status='cancelled',interruption_reason='user_cancel',finished_at=? WHERE batch_id=? AND status NOT IN ('succeeded','partial','failed','cancelled')").run(new Date().toISOString(),b.id);
+        this.db.prepare("UPDATE batches SET control_state='cancelled',finished_at=? WHERE id=?").run(new Date().toISOString(),b.id);
+      }
+    }
   }
   event(type: string, message: string) {
     this.db

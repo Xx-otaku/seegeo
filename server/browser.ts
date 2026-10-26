@@ -39,6 +39,17 @@ export class BrowserPool {
     await page.bringToFront();
     return page;
   }
+  async interrupt(page: Page) {
+    if (page.isClosed()) return;
+    if (page.context().pages().length === 1) await page.context().newPage();
+    await page.close({ runBeforeUnload: false });
+  }
+  async open(platform: Platform, url: string) {
+    const home = await this.page(platform);
+    const tab = await home.context().newPage();
+    await tab.goto(url, {waitUntil:"domcontentloaded", timeout:30000});
+    await tab.bringToFront();
+  }
   async close() {
     await Promise.allSettled([...this.contexts.values()].map((c) => c.close()));
     this.contexts.clear();

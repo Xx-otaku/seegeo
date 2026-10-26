@@ -6,6 +6,7 @@ export const platformNames: Record<Platform, string> = {
   yuanbao: "腾讯元宝",
 };
 export type TaskStatus =
+  | "paused"
   | "pending"
   | "running"
   | "waiting_login"
@@ -72,6 +73,8 @@ export interface Task {
   finished_at: string | null;
   error: string | null;
   diagnostic: string | null;
+  interruption_reason: string | null;
+  interrupted_at: string | null;
 }
 export interface Schedule {
   enabled: boolean;

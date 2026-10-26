@@ -79,6 +79,7 @@ app.get("/api/state", () => ({
   paused: store.getSetting("paused") || false,
   busy: runner.busy,
   currentTask: runner.current,
+  ...runner.controls(),
   schedule: store.schedule,
   nextRun: nextSlot(store.schedule),
   platforms: platformIds.map((id) => ({
@@ -159,7 +160,7 @@ app.get<{ Params: { id: string } }>("/api/results/:id", (req) => {
   if (!task) throw new Error("结果不存在");
   return task;
 });
-app.post("/api/batches", (req) => {
+app.post("/api/batches", async (req) => {
   if (runner.busy || store.hasUnfinished())
     throw new Error("已有未完成任务，请先恢复、取消或完成当前批次");
   const body = z
@@ -171,64 +172,15 @@ app.post("/api/batches", (req) => {
       questionIds: z.array(z.number().int().positive()).min(1).optional(),
     })
     .parse(req.body || {});
-  const batchId = store.createBatch(
-    "manual",
-    [...new Set(body.platforms)],
-    body.questionIds,
-  );
-  runner.resume();
+  const batchId = await runner.create([...new Set(body.platforms)],body.questionIds);
   return { batchId };
 });
-app.post("/api/pause", () => {
-  runner.pause();
-  return { ok: true };
-});
-app.post("/api/resume", () => {
-  runner.resume();
-  return { ok: true };
-});
-app.post<{ Params: { id: string } }>("/api/batches/:id/cancel", (req) => {
-  const batchId = id(req.params.id);
-  if (runner.busy) throw new Error("请先暂停并等待当前任务停止");
-  for (const t of store.tasks({ batchId }))
-    if (
-      [
-        "pending",
-        "waiting_login",
-        "waiting_verification",
-        "uncertain",
-      ].includes(t.status)
-    )
-      store.patchTask(t.id, {
-        status: "cancelled",
-        finished_at: new Date().toISOString(),
-        error: t.status === "uncertain" ? "用户取消；原会话可能仍有回答" : null,
-      });
-  runner.finishBatch(batchId);
-  for (const p of platformIds) runner.releasePlatform(p);
-  return { ok: true };
-});
-app.post<{ Params: { platform: string } }>(
-  "/api/platforms/:platform/login",
-  async (req) => {
-    const p = platformSchema.parse(req.params.platform);
-    if (runner.busy) throw new Error("请先暂停任务，避免登录操作影响当前会话");
-    runner.busy = true;
-    try {
-      await runner.browsers.login(p);
-      return { ok: true };
-    } finally {
-      runner.busy = false;
-    }
-  },
-);
-app.post<{ Params: { platform: string } }>(
-  "/api/platforms/:platform/resume",
-  (req) => {
-    runner.releasePlatform(platformSchema.parse(req.params.platform));
-    return { ok: true };
-  },
-);
+app.post("/api/pause", async () => { await runner.pause(); return {ok:true}; });
+app.post("/api/resume", async () => { await runner.resume(); return {ok:true}; });
+app.post<{ Params: { id: string } }>("/api/batches/:id/cancel", async req => {await runner.cancel(id(req.params.id)); return {ok:true};});
+app.post<{ Params: { id: string } }>("/api/batches/:id/rerun", async req => ({batchId: await runner.rerun(id(req.params.id))}));
+app.post<{ Params: { platform: string } }>("/api/platforms/:platform/login", async req => {await runner.login(platformSchema.parse(req.params.platform)); return {ok:true};});
+app.post<{ Params: { platform: string } }>("/api/platforms/:platform/resume", async req => {await runner.releasePlatform(platformSchema.parse(req.params.platform)); return {ok:true};});
 app.post<{ Params: { platform: string } }>(
   "/api/platforms/:platform/validate",
   (req) => {
@@ -240,52 +192,10 @@ app.post<{ Params: { platform: string } }>(
     return { ok: true };
   },
 );
-app.post<{ Params: { id: string } }>("/api/tasks/:id/retry", (req) => {
-  const batchId = runner.retry(id(req.params.id));
-  return { batchId };
-});
-app.post<{ Params: { id: string } }>("/api/tasks/:id/recover", async (req) => {
-  if (runner.busy) throw new Error("请先暂停并等待当前任务停止");
-  const task = store.task(id(req.params.id));
-  if (
-    !task ||
-    !["uncertain", "partial", "waiting_verification", "waiting_login"].includes(
-      task.status,
-    ) ||
-    !task.conversation_url ||
-    !task.mode
-  )
-    throw new Error("缺少可核对的原会话或模式，请先人工查看原会话");
-  const page = await runner.browsers.page(task.platform);
-  const expectedHost = new URL(
-    task.platform === "doubao"
-      ? "https://www.doubao.com"
-      : task.platform === "deepseek"
-        ? "https://chat.deepseek.com"
-        : "https://yuanbao.tencent.com",
-  ).hostname;
-  if (new URL(task.conversation_url).hostname !== expectedHost)
-    throw new Error("原会话地址不属于该平台");
-  await page.goto(task.conversation_url, { waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(1500);
-  try {
-    const capture = await recoverExisting(
-      page,
-      task.platform,
-      task.question_text,
-      task.mode,
-      task.model,
-      task.started_at || undefined,
-    );
-    store.completeTask(task.id, capture);
-    runner.releasePlatform(task.platform);
-    runner.finishBatch(task.batch_id);
-    return { ok: true };
-  } catch (e) {
-    if (e instanceof CollectorError) throw new Error(e.message);
-    throw e;
-  }
-});
+app.post<{ Params: { id: string } }>("/api/tasks/:id/retry", async req => ({batchId:await runner.retry(id(req.params.id))}));
+app.post<{ Params: { id: string } }>("/api/tasks/:id/recover", async req => {await runner.recoverTask(id(req.params.id));return {ok:true};});
+app.post<{ Params: { id: string } }>("/api/tasks/:id/open", async req => {await runner.openConversation(id(req.params.id));return {ok:true};});
+app.get<{ Params: { id: string } }>("/api/tasks/:id/attempts", req => store.attempts(id(req.params.id)));
 app.patch("/api/settings", (req) => {
   const body = z
     .object({
@@ -330,10 +240,10 @@ app.get<{ Params: { format: string } }>(
       return reply.type("application/json; charset=utf-8").send(
         JSON.stringify(
           {
-            schemaVersion: 1,
+            schemaVersion: 2,
             exportedAt: new Date().toISOString(),
             batches: store.batches(),
-            results: tasks.map(({ answer_html, ...t }) => t),
+            results: tasks.map(({ answer_html, ...t }) => ({...t, attemptsLog: store.attempts(t.id)})),
           },
           null,
           2,

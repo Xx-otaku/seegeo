@@ -700,6 +700,8 @@ export async function recoverExisting(
   mode: Capture["mode"],
   model: string | null = null,
   startedAt = new Date().toISOString(),
+  signal?: AbortSignal,
+  timeoutMs = 300000,
 ): Promise<Capture> {
   await page
     .locator(selectors[p].input)
@@ -726,22 +728,23 @@ export async function recoverExisting(
       true,
     );
   const answer = page.locator(selectors[p].answer).last();
-  if (!(await visible(answer))) await answer.scrollIntoViewIfNeeded();
-  if (
-    !(await isComplete(page, p)) ||
-    (await visible(page.locator(selectors[p].stop))) ||
-    (p === "doubao" &&
-      (await answer.getAttribute("data-streaming")) !== "false") ||
-    (p === "yuanbao" &&
-      (await page
-        .locator('[data-conv-speaker="ai"][data-conv-outputting="true"]')
-        .count()))
-  )
-    throw new CollectorError("原回答尚未完成，请稍后再核对", "uncertain", true);
-  const text = await answer.innerText();
-  await page.waitForTimeout(3000);
-  if (!text || text !== (await answer.innerText()))
-    throw new CollectorError("原回答仍在变化，请稍后恢复", "uncertain", true);
+  const deadline = Date.now() + timeoutMs;
+  let text = "", previous = "", stable = 0;
+  while (Date.now() < deadline) {
+    if (signal?.aborted) throw new CollectorError("原会话恢复已中断", "cancelled", true);
+    await checkAccess(page);
+    if (await answer.count()) {
+      text = await answer.innerText();
+      const complete = await isComplete(page,p);
+      if (complete && text && text === previous && !(await visible(page.locator(selectors[p].stop)))) stable++;
+      else stable=0;
+      previous=text;
+      if (stable >= 2) break;
+    }
+    await page.waitForTimeout(1500);
+  }
+  if (stable < 2) throw new CollectorError("原会话未在等待时间内完成", "timeout", true);
+  if (signal?.aborted) throw new CollectorError("原会话恢复已中断", "cancelled", true);
   const extracted = await extractSources(page, p, answer).catch(() => ({
     sources: [] as Source[],
     status: "failed" as const,
