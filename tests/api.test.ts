@@ -138,7 +138,7 @@ test("exports keep source associations, safe CSV and complete JSON; archived que
   const exported = (
     await request("/export/results.json?questionId=" + questionId)
   ).data;
-  assert.equal(exported.schemaVersion, 1);
+  assert.equal(exported.schemaVersion, 2);
   assert.equal(exported.results[0].answer, '=原始回答\n中文,"引号"');
   assert.equal(exported.batches[0].id, batch);
   const csv = await (await fetch(base + "/export/answers.csv")).text();
@@ -160,4 +160,17 @@ test("exports keep source associations, safe CSV and complete JSON; archived que
     (await request("/results?questionId=" + questionId)).data.length,
     1,
   );
+});
+test("批次取消接口可在暂停状态直接调用，保留成功结果并立即开放开始操作", async () => {
+  const state = (await request("/state")).data;
+  assert.ok(state.controls);
+  const batch = state.batches[0].id;
+  const before = (await request("/results")).data;
+  assert.equal((await request(`/batches/${batch}/cancel`, {})).status, 200);
+  assert.equal((await request(`/batches/${batch}/cancel`, {})).status, 200);
+  const after = (await request("/state")).data;
+  assert.equal(after.activeBatch, null);
+  assert.equal(after.controls.start.enabled, true);
+  assert.equal(after.paused, false);
+  assert.deepEqual((await request("/results")).data, before);
 });

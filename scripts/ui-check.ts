@@ -19,9 +19,23 @@ await page.screenshot({ path: dir + "/desktop.png", fullPage: true });
 await page.getByRole("button", { name: "采集记录", exact: true }).click();
 await page.getByRole("heading", { name: "采集记录", exact: true }).waitFor();
 await page.screenshot({ path: dir + "/records.png", fullPage: true });
+// Prefer the completed, disabled validation records; never operate the paused business batch.
+const samples = await page
+  .getByLabel("采集批次")
+  .locator('option[value="2"]')
+  .count();
+if (samples) {
+  await page.getByLabel("采集批次").selectOption("2");
+  await page.waitForTimeout(300);
+}
 const question = page.locator(".question-link").first();
 if (await question.count()) {
   await question.click();
+  await page.locator(".answer-text").waitFor();
+  await page.screenshot({ path: dir + "/answer.png", fullPage: true });
+  await page.getByRole("button", { name: "历史变化", exact: true }).click();
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: dir + "/history.png", fullPage: true });
   await page.getByRole("button", { name: "三平台对照", exact: true }).click();
   await page.waitForTimeout(500);
   assert.equal(await page.locator(".platform-column").count(), 3);
@@ -47,6 +61,21 @@ const overflow = await mobile.evaluate(
   () => document.documentElement.scrollWidth > innerWidth,
 );
 assert.equal(overflow, false, "移动端不应产生整页横向溢出");
+await mobile.getByRole("button", { name: "采集记录", exact: true }).click();
+if (samples) {
+  await mobile.getByLabel("采集批次").selectOption("2");
+  await mobile.waitForTimeout(300);
+}
+await mobile.locator(".question-link").first().click();
+await mobile.locator(".answer-text").waitFor();
+await mobile.screenshot({ path: dir + "/mobile-answer.png", fullPage: true });
+assert.equal(
+  await mobile.evaluate(
+    () => document.documentElement.scrollWidth > innerWidth,
+  ),
+  false,
+  "窄屏正文和来源不应产生整页溢出",
+);
 assert.deepEqual(errors, [], "浏览器不应出现脚本错误");
 console.log(
   JSON.stringify({

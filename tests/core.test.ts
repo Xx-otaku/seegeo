@@ -140,3 +140,44 @@ test("a completed answer with failed source extraction is partial, never success
   assert.ok(csv.includes('""引号""'));
   s.close();
 });
+
+test("v1迁移备份数据库并将三条手动暂停遗留项纳入恢复，旧答案保留", async () => {
+  const { mkdtempSync, readdirSync, rmSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const dir = mkdtempSync(join(tmpdir(), "seegeo-migration-")),
+    path = join(dir, "seegeo.sqlite");
+  let store = new Store(path);
+  store.importQuestions([{ text: "历史问题" }]);
+  const b = store.createBatch("manual");
+  for (const t of store.tasks())
+    store.patchTask(t.id, {
+      status: "uncertain",
+      phase: "submitted",
+      error: "任务已暂停，需核对原会话后继续",
+      answer: "暂存回答",
+    });
+  store.setSetting("paused", true);
+  store.db.exec(
+    "DROP TABLE task_attempts; ALTER TABLE batches DROP COLUMN control_state; ALTER TABLE batches DROP COLUMN resume_task_id; ALTER TABLE batches DROP COLUMN parent_batch_id; ALTER TABLE tasks DROP COLUMN interruption_reason; ALTER TABLE tasks DROP COLUMN interrupted_at; PRAGMA user_version=1;",
+  );
+  store.close();
+  store = new Store(path);
+  assert.equal(store.tasks({ status: "paused" }).length, 3);
+  assert.ok(
+    store
+      .tasks()
+      .every(
+        (t) =>
+          t.answer === "暂存回答" && t.interruption_reason === "manual_pause",
+      ),
+  );
+  assert.equal(store.batch(b)?.control_state, "paused");
+  assert.equal(store.getSetting("paused"), true);
+  assert.equal(readdirSync(join(dir, "backups")).length, 1);
+  store.close();
+  store = new Store(path);
+  assert.equal(readdirSync(join(dir, "backups")).length, 1);
+  store.close();
+  rmSync(dir, { recursive: true, force: true });
+});
