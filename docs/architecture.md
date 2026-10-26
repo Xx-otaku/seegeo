@@ -10,9 +10,13 @@ React 本机面板 → Fastify API → SQLite 持久队列 → 串行 worker →
 
 ## 存储与调度
 
-SQLite WAL；questions 维护当前问题，tasks 保存批次内的问题版本快照、状态、提交阶段、回答、来源 JSON、实际模式和会话地址。batches 保存触发来源、计划与实际时间；settings、events、validations 分别保存配置、可见事件和平台核对状态。数据库 schema version 为 1。
+SQLite WAL；questions 维护当前问题，tasks 保存批次内的问题版本快照、状态、提交阶段、回答、来源 JSON、实际模式和会话地址。batches 保存触发来源、计划与实际时间；settings、events、validations 分别保存配置、可见事件和平台核对状态。数据库 schema version 为 2；task_attempts 保存每次采集、原会话恢复及回退重试的阶段、会话、起止时间、结果和中断原因。迁移前备份，版本迁移在事务中执行。
 
-队列任务状态与网页提交阶段分别持久化。启动恢复：提交前中断可重新排队；提交过程中或生成期间中断标为 uncertain，必须核对原会话。重采创建新任务，不覆盖原结果。
+队列任务状态与网页提交阶段分别持久化。批次控制状态为 running、pausing、paused、waiting、cancelling、cancelled、completed；任务另有 paused、登录/验证等待及 uncertain。启动恢复会将异常中断批次保持暂停；提交过的项先恢复原会话，未提交的项可重新排队。
+
+Runner 的控制命令使用串行 promise 队列；一个 worker 独占当前采集。暂停/取消发出 AbortSignal，guarded race 允许控制立即停止等待，阶段更新和最终写入都检查 signal。合作的暂停保留原页面和生成连接，超出短暂退出等待或取消则关闭工作标签，保留 profile。旧 promise 即使迟到也无法写回结果。当前项优先于其它 paused 和 pending 项，手动暂停不会屏蔽平台。
+
+恢复先核对原问题，等待原回答完成、稳定且有完成信号；原会话失效时只回退一个新对话尝试。登录/验证码不触发回退。取消保留成功和部分完成项目，终止未完成项目，结束批次并清除控制残留。重跑从 tasks 快照复制矩阵，不读取当前 questions 的启用或编辑状态。单条重采也创建新批次并直接开始，旧结果不覆盖。
 
 调度依据固定 Asia/Shanghai 日历槽计算最近计划时点，不用“运行结束再 sleep 一周”。调度游标与批次创建在事务中保存。单一监听端口防止同一服务重复运行；不要用不同端口启动两个服务并指向同一数据目录。
 
@@ -22,20 +26,22 @@ SQLite WAL；questions 维护当前问题，tasks 保存批次内的问题版本
 
 | 接口 | 用途 |
 | --- | --- |
-| GET `/api/state` | 状态、计划、批次、平台核对和修改请求 token |
+| GET `/api/state` | 状态、activeBatch/displayBatch、pausedTask/currentItem、controls 的 enabled/reason、计划及修改请求 token |
 | GET `/api/questions`、GET `/api/questions/:id` | 当前问题列表及包含归档问题的详情 |
 | POST `/api/questions/import` | `{content,format: text/csv,group}` 批量导入 |
 | PATCH/DELETE `/api/questions/:id` | 编辑、启停、移出问题库 |
 | POST `/api/batches` | `{platforms,questionIds?}` 创建手动任务 |
 | GET `/api/results`、GET `/api/results/:id` | 平台、问题、批次、状态及时间筛选 |
 | POST `/api/pause`、POST `/api/resume` | 暂停与继续 |
+| POST `/api/batches/:id/cancel`、`/rerun` | 直接取消或按快照新建整轮 |
+| GET `/api/tasks/:id/attempts`、POST `/api/tasks/:id/open` | 尝试记录、使用对应采集登录态打开原会话 |
 | POST `/api/platforms/:platform/login` | 打开独立登录窗口 |
-| POST `/api/platforms/:platform/resume` | 登录/验证处理完成；不自动重发 uncertain 任务 |
+| POST `/api/platforms/:platform/resume` | 登录/验证处理完成；按提交阶段恢复原会话或排队 |
 | POST `/api/tasks/:id/recover`、`/retry` | 原会话恢复或明确另开对话重采 |
 | PATCH `/api/settings` | 调度、自动联网口径和通知 |
 | GET `/api/export/answers.csv`、`sources.csv`、`results.json` | 导出全部或筛选结果 |
 
-修改请求需 `X-Seegeo-Token`（从本机 `/api/state` 取得），GET API 不跨域开放。平台 ID 为 doubao、deepseek、yuanbao。JSON 导出 `schemaVersion: 1`。
+修改请求需 `X-Seegeo-Token`（从本机 `/api/state` 取得），GET API 不跨域开放。平台 ID 为 doubao、deepseek、yuanbao。JSON 导出 `schemaVersion: 2`。
 
 ## 故障定位
 
