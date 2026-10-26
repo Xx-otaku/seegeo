@@ -1680,6 +1680,8 @@ function Records({
   act: Act;
   exportFile: (f: string, q?: string) => void;
 }) {
+  const { busy } = useContext(OperationContext);
+  const [selected, setSelected] = useState<number[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]),
     [batch, setBatch] = useState(""),
     [platform, setPlatform] = useState(""),
@@ -1698,12 +1700,20 @@ function Records({
   useEffect(() => {
     const load = () =>
       void api<Task[]>("/results?" + query)
-        .then(setTasks)
+        .then((rows) => {
+          setTasks(rows);
+          setSelected((ids) =>
+            ids.filter((id) => rows.some((t) => t.id === id)),
+          );
+        })
         .catch((e) => setError(e.message));
     load();
     const i = setInterval(load, 5000);
     return () => clearInterval(i);
   }, [query]);
+  const deletable = (t: Task) =>
+    Boolean(state?.batches.find((b) => b.id === t.batch_id)?.finished_at);
+  const available = tasks.filter(deletable);
   return (
     <>
       {state?.batches[0] && (
@@ -1807,11 +1817,73 @@ function Records({
           导出筛选结果
         </button>
       </div>
+      {selected.length > 0 && (
+        <div className="selection-bar" aria-label="批量记录操作">
+          <span>已选 {selected.length} 条采集记录</span>
+          <span className="selection-help">
+            删除回答和来源，不删除问题；批次范围保留。
+          </span>
+          <button className="text-button" onClick={() => setSelected([])}>
+            取消选择记录
+          </button>
+          <button
+            className="button danger"
+            disabled={busy}
+            onClick={async () => {
+              if (
+                !window.confirm(
+                  `删除所选 ${selected.length} 条采集记录？这些记录的回答和来源将从历史、导出及统计中移除，问题库和批次范围保留。`,
+                )
+              )
+                return;
+              setError("");
+              if (
+                await act(async () => {
+                  try {
+                    return await api("/results/bulk-delete", {
+                      taskIds: selected,
+                    });
+                  } catch (e) {
+                    setError((e as Error).message);
+                    throw e;
+                  }
+                }, "采集记录已删除")
+              ) {
+                const rows = await api<Task[]>("/results?" + query);
+                setTasks(rows);
+                setSelected([]);
+              }
+            }}
+          >
+            <Trash2 size={14} />
+            删除所选记录（{selected.length}）
+          </button>
+        </div>
+      )}
+      <p className="muted fine-print">
+        只可删除已结束批次中的记录；进行中的批次请先完成或取消。
+      </p>
       {error && <p role="alert">{error}</p>}
       <div className="table-wrap">
         <table>
           <thead>
             <tr>
+              <th className="checkbox-cell">
+                <input
+                  type="checkbox"
+                  aria-label="选择当前筛选的可删除记录"
+                  checked={
+                    available.length > 0 &&
+                    available.every((t) => selected.includes(t.id))
+                  }
+                  disabled={!available.length || busy}
+                  onChange={(e) =>
+                    setSelected(
+                      e.target.checked ? available.map((t) => t.id) : [],
+                    )
+                  }
+                />
+              </th>
               <th>问题</th>
               <th>平台</th>
               <th>状态</th>
@@ -1823,6 +1895,22 @@ function Records({
           <tbody>
             {tasks.map((t) => (
               <tr key={t.id}>
+                <td>
+                  <input
+                    type="checkbox"
+                    aria-label={`选择采集记录 ${t.id}`}
+                    title={deletable(t) ? "选择记录" : "请先完成或取消所属批次"}
+                    checked={selected.includes(t.id)}
+                    disabled={busy || !deletable(t)}
+                    onChange={(e) =>
+                      setSelected(
+                        e.target.checked
+                          ? [...selected, t.id]
+                          : selected.filter((id) => id !== t.id),
+                      )
+                    }
+                  />
+                </td>
                 <td>
                   <button className="question-link" onClick={() => onRead(t)}>
                     {t.question_text}

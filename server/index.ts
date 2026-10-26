@@ -169,6 +169,12 @@ app.post("/api/questions/bulk-delete", (req) => {
 app.get("/api/results", (req) =>
   store.tasks({ ...filters(req.query), limit: 500 }),
 );
+app.post("/api/results/bulk-delete", (req) => {
+  const { taskIds } = z
+    .object({ taskIds: z.array(z.number().int().positive()).min(1).max(1000) })
+    .parse(req.body);
+  return { removed: store.deleteResults(taskIds) };
+});
 app.get<{ Params: { id: string } }>("/api/results/:id", (req) => {
   const task = store.task(id(req.params.id));
   if (!task) throw new Error("结果不存在");

@@ -21,11 +21,11 @@ export class Store {
     const version = Number(
       this.db.prepare("PRAGMA user_version").get()!.user_version,
     );
-    if (version > 2) throw new Error("数据库版本高于当前程序，请升级程序");
-    if (version === 1 && databasePath !== ":memory:") {
+    if (version > 3) throw new Error("数据库版本高于当前程序，请升级程序");
+    if (version > 0 && version < 3 && databasePath !== ":memory:") {
       const backupDir = join(dirname(databasePath), "backups");
       mkdirSync(backupDir, { recursive: true, mode: 0o700 });
-      const backup = join(backupDir, `before-v2-${Date.now()}.sqlite`);
+      const backup = join(backupDir, `before-v3-${Date.now()}.sqlite`);
       this.db.exec(`VACUUM INTO '${backup.replaceAll("'", "''")}'`);
       chmodSync(backup, 0o600);
     }
@@ -57,6 +57,12 @@ export class Store {
           this.db.exec(
             "UPDATE batches SET control_state='paused' WHERE finished_at IS NULL",
           );
+      });
+    if (version < 3)
+      this.transaction(() => {
+        this.db.exec(
+          "ALTER TABLE tasks ADD COLUMN deleted_at TEXT; PRAGMA user_version=3;",
+        );
       });
     if (!this.getSetting("schedule"))
       this.setSetting("schedule", {
@@ -118,7 +124,7 @@ export class Store {
   latestResults() {
     return this.db
       .prepare(
-        "SELECT id,question_id,platform,status,finished_at,source_status,json_array_length(sources) sources_count FROM tasks WHERE id IN (SELECT MAX(id) FROM tasks GROUP BY question_id,platform)",
+        "SELECT id,question_id,platform,status,finished_at,source_status,json_array_length(sources) sources_count FROM tasks WHERE id IN (SELECT MAX(id) FROM tasks WHERE deleted_at IS NULL GROUP BY question_id,platform)",
       )
       .all();
   }
@@ -199,6 +205,31 @@ export class Store {
       return unique.length;
     });
   }
+  deleteResults(ids: number[]) {
+    return this.transaction(() => {
+      const unique = [...new Set(ids)];
+      const records = unique.map((id) => this.task(id));
+      if (records.some((t) => !t))
+        throw new Error("部分记录已不存在，请刷新列表后重试");
+      if (records.some((t) => !this.batch(t!.batch_id)?.finished_at))
+        throw new Error("请先完成或取消所属批次，再删除采集记录");
+      const now = new Date().toISOString();
+      for (const t of records) {
+        // Retain only the question/platform snapshot for whole-batch reruns.
+        this.db.prepare("DELETE FROM task_attempts WHERE task_id=?").run(t!.id);
+        this.db
+          .prepare(
+            "UPDATE tasks SET deleted_at=?,answer=NULL,answer_html=NULL,sources='[]',source_status=NULL,model=NULL,mode=NULL,conversation_url=NULL,error=NULL,diagnostic=NULL WHERE id=?",
+          )
+          .run(now, t!.id);
+      }
+      this.event(
+        "records",
+        `删除 ${unique.length} 条采集记录；保留批次问题范围`,
+      );
+      return unique.length;
+    });
+  }
   createBatch(
     trigger: string,
     platforms: Platform[] = [...platformIds],
@@ -235,9 +266,12 @@ export class Store {
       from?: string;
       to?: string;
       limit?: number;
+      includeDeleted?: boolean;
     } = {},
   ) {
-    const clauses: string[] = [],
+    const clauses: string[] = filters.includeDeleted
+        ? []
+        : ["deleted_at IS NULL"],
       params: (string | number)[] = [];
     for (const [key, col] of [
       ["batchId", "batch_id"],
@@ -269,7 +303,9 @@ export class Store {
       })) as unknown as Task[];
   }
   task(id: number) {
-    const row = this.db.prepare("SELECT * FROM tasks WHERE id=?").get(id);
+    const row = this.db
+      .prepare("SELECT * FROM tasks WHERE id=? AND deleted_at IS NULL")
+      .get(id);
     return row
       ? ({
           ...row,
@@ -293,7 +329,7 @@ export class Store {
   }
   cloneBatch(id: number, taskId?: number) {
     return this.transaction(() => {
-      const tasks = this.tasks({ batchId: id })
+      const tasks = this.tasks({ batchId: id, includeDeleted: true })
         .filter((t) => !taskId || t.id === taskId)
         .reverse();
       if (!tasks.length) throw new Error("批次不存在或没有任务");
@@ -420,7 +456,7 @@ export class Store {
   batches() {
     return this.db
       .prepare(
-        `SELECT b.*, COUNT(t.id) total, SUM(t.status='succeeded') succeeded, SUM(t.status='partial') partial, SUM(t.status='failed') failed, SUM(t.status IN ('waiting_login','waiting_verification','uncertain')) waiting, SUM(t.status='paused') paused, SUM(t.status='running') running, SUM(t.status='pending') pending, SUM(t.status='cancelled') cancelled FROM batches b LEFT JOIN tasks t ON t.batch_id=b.id GROUP BY b.id ORDER BY b.id DESC`,
+        `SELECT b.*, COUNT(t.id) total, SUM(t.status='succeeded') succeeded, SUM(t.status='partial') partial, SUM(t.status='failed') failed, SUM(t.status IN ('waiting_login','waiting_verification','uncertain')) waiting, SUM(t.status='paused') paused, SUM(t.status='running') running, SUM(t.status='pending') pending, SUM(t.status='cancelled') cancelled, SUM(t.deleted_at IS NOT NULL) removed FROM batches b LEFT JOIN tasks t ON t.batch_id=b.id GROUP BY b.id ORDER BY b.id DESC`,
       )
       .all();
   }

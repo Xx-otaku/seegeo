@@ -237,7 +237,7 @@ test(
       assert.ok(calls.some((x) => x.endsWith("/retry")));
       assert.ok(calls.some((x) => x.endsWith("/recover")));
       assert.equal(calls.filter((x) => x.endsWith("/login")).length, 3);
-      assert.match(await page.locator(".repo-link").innerText(), /v0\.2\.0/);
+      assert.match(await page.locator(".repo-link").innerText(), /v0\.2\.1/);
       await page.getByLabel("选择当前筛选的全部问题").check();
       const bulk = page.getByRole("button", {
         name: "删除所选（2）",
@@ -259,6 +259,19 @@ test(
       assert.equal(
         (await (await fetch(root + "/api/results")).json()).length,
         1,
+      );
+      await page.getByRole("button", { name: "采集记录", exact: true }).click();
+      await page.getByLabel("选择当前筛选的可删除记录").check();
+      page.once("dialog", (d) => d.accept());
+      await page
+        .getByRole("button", { name: "删除所选记录（1）", exact: true })
+        .click();
+      await page
+        .getByRole("heading", { name: "还没有采集记录", exact: true })
+        .waitFor();
+      assert.equal(
+        (await (await fetch(root + "/api/results")).json()).length,
+        0,
       );
       assert.deepEqual(errors, []);
       assert.equal(q.id, 1);

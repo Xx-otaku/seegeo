@@ -159,7 +159,7 @@ test("v1迁移备份数据库并将三条手动暂停遗留项纳入恢复，旧
     });
   store.setSetting("paused", true);
   store.db.exec(
-    "DROP TABLE task_attempts; ALTER TABLE batches DROP COLUMN control_state; ALTER TABLE batches DROP COLUMN resume_task_id; ALTER TABLE batches DROP COLUMN parent_batch_id; ALTER TABLE tasks DROP COLUMN interruption_reason; ALTER TABLE tasks DROP COLUMN interrupted_at; PRAGMA user_version=1;",
+    "DROP TABLE task_attempts; ALTER TABLE tasks DROP COLUMN deleted_at; ALTER TABLE batches DROP COLUMN control_state; ALTER TABLE batches DROP COLUMN resume_task_id; ALTER TABLE batches DROP COLUMN parent_batch_id; ALTER TABLE tasks DROP COLUMN interruption_reason; ALTER TABLE tasks DROP COLUMN interrupted_at; PRAGMA user_version=1;",
   );
   store.close();
   store = new Store(path);
@@ -218,5 +218,46 @@ test("批量移除校验完整范围、去重并保留历史快照和已保存�
   assert.equal(s.task(task.id)?.sources[0].title, "旧来源");
   assert.equal(s.tasks({ batchId: batch }).length, 3);
   assert.ok(s.question(ids[0]));
+  s.close();
+});
+
+test("采集记录批量删除清除答案来源和尝试，保留整轮重跑范围并拒绝未结束批次", () => {
+  const s = new Store(":memory:");
+  s.importQuestions([{ text: "历史甲" }, { text: "历史乙" }]);
+  const b = s.createBatch("manual", ["doubao"]);
+  const tasks = s.tasks({ batchId: b });
+  s.patchTask(tasks[0].id, {
+    answer: "历史正文",
+    sources: [
+      {
+        kind: "citation",
+        url: "https://example.com",
+        title: "来源",
+        site: "example.com",
+        order: 1,
+        snippet: "",
+      },
+    ],
+  });
+  assert.throws(() => s.deleteResults([tasks[0].id]), /完成或取消/);
+  assert.equal(s.task(tasks[0].id)?.answer, "历史正文");
+  s.db
+    .prepare("UPDATE batches SET finished_at=? WHERE id=?")
+    .run(new Date().toISOString(), b);
+  s.beginAttempt(tasks[0].id, "collect");
+  assert.equal(s.deleteResults([tasks[0].id, tasks[0].id]), 1);
+  assert.equal(s.task(tasks[0].id), undefined);
+  assert.equal(s.tasks({ batchId: b }).length, 1);
+  assert.equal(s.attempts(tasks[0].id).length, 0);
+  assert.equal(
+    s
+      .tasks({ batchId: b, includeDeleted: true })
+      .find((t) => t.id === tasks[0].id)?.answer,
+    null,
+  );
+  assert.equal(s.latestResults().length, 1);
+  const next = s.cloneBatch(b);
+  assert.equal(s.tasks({ batchId: next }).length, 2);
+  assert.equal(s.questions().length, 2);
   s.close();
 });

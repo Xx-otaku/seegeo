@@ -1,6 +1,6 @@
 {
   "name": "seegeo",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "本机三平台回答与来源监测",
   "type": "module",

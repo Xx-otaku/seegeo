@@ -204,5 +204,29 @@ test("批量删除API验证空列表与非法范围，成功后只移出问题�
     !(await request("/questions")).data.some((q: any) => ids.includes(q.id)),
   );
   assert.equal((await request("/questions/" + ids[0])).data.enabled, 0);
-  assert.equal((await request("/state")).data.version, "0.2.0");
+  assert.equal((await request("/state")).data.version, "0.2.1");
+});
+test("采集记录批量删除API拒绝非法范围，并从详情、导出和最新结果移除", async () => {
+  const rows = (await request("/results")).data;
+  const task = rows[0];
+  assert.ok(task);
+  assert.equal(
+    (await request("/results/bulk-delete", { taskIds: [] })).status,
+    400,
+  );
+  assert.equal(
+    (await request("/results/bulk-delete", { taskIds: [task.id, 999999] }))
+      .status,
+    404,
+  );
+  assert.equal((await request("/results/" + task.id)).status, 200);
+  const count = (await request("/questions")).data.length;
+  assert.equal(
+    (await request("/results/bulk-delete", { taskIds: [task.id] })).data
+      .removed,
+    1,
+  );
+  assert.equal((await request("/results/" + task.id)).status, 404);
+  assert.equal((await request("/export/results.json")).data.results.length, 0);
+  assert.equal((await request("/questions")).data.length, count);
 });
