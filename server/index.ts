@@ -18,6 +18,14 @@ import { nextSlot } from "./schedule.js";
 import { parseQuestions, answersCSV, sourcesCSV } from "./import-export.js";
 import { recoverExisting } from "./collector.js";
 
+import {
+  buildBaseline,
+  baselineConfigSchema,
+  defaultBaselineConfig,
+  reviewSchema,
+  type ReviewMap,
+  type BaselineConfig,
+} from "./baseline.js";
 const app = Fastify({ bodyLimit: 2 * 1024 * 1024 });
 const token = randomBytes(24).toString("hex");
 const { version } = JSON.parse(
@@ -167,7 +175,9 @@ app.post("/api/questions/bulk-delete", (req) => {
   return { removed };
 });
 app.get("/api/results", (req) =>
-  store.tasks({ ...filters(req.query), limit: 500 }),
+  store
+    .tasks({ ...filters(req.query), limit: 500 })
+    .map((t) => ({ ...t, can_delete: !!store.batch(t.batch_id)?.finished_at })),
 );
 app.post("/api/results/bulk-delete", (req) => {
   const { taskIds } = z
@@ -179,6 +189,64 @@ app.get<{ Params: { id: string } }>("/api/results/:id", (req) => {
   const task = store.task(id(req.params.id));
   if (!task) throw new Error("结果不存在");
   return task;
+});
+function baselineReport(query: unknown) {
+  const { sourceKind, ...scope } = z
+    .object({
+      sourceKind: z.enum(["citation", "search"]).default("citation"),
+      batchId: z.coerce.number().int().positive().optional(),
+      platform: platformSchema.optional(),
+      from: z.string().optional(),
+      to: z.string().optional(),
+      group: z.string().optional(),
+    })
+    .parse(query);
+  const reviews = Object.fromEntries(
+    store.db
+      .prepare("SELECT task_id,payload FROM baseline_reviews")
+      .all()
+      .map((r) => [String(r.task_id), JSON.parse(String(r.payload))]),
+  ) as ReviewMap;
+  const config =
+    store.getSetting<BaselineConfig>("baselineConfig") || defaultBaselineConfig;
+  const rows = store
+    .tasks(scope)
+    .filter((t) => !scope.group || t.group_name === scope.group);
+  return buildBaseline(rows, config, reviews, sourceKind);
+}
+app.get("/api/baseline", (req) => baselineReport(req.query));
+app.get("/api/baseline/export", (req, reply) =>
+  reply
+    .header(
+      "Content-Disposition",
+      'attachment; filename="seegeo-baseline.json"',
+    )
+    .send(baselineReport(req.query)),
+);
+app.patch("/api/baseline/config", (req) => {
+  const config = baselineConfigSchema.parse(req.body);
+  store.setSetting("baselineConfig", config);
+  store.event("baseline", "基线统计品牌与别名已更新");
+  return config;
+});
+app.put<{ Params: { id: string } }>("/api/baseline/reviews/:id", (req) => {
+  const task = store.task(id(req.params.id));
+  if (!task) throw new Error("记录不存在");
+  if (!["succeeded", "partial"].includes(task.status) || !task.answer)
+    throw new Error("只能核对已有完整回答的记录");
+  const review = reviewSchema.parse(req.body);
+  const config =
+    store.getSetting<BaselineConfig>("baselineConfig") || defaultBaselineConfig;
+  if (review.target !== config.brands[0].name)
+    throw new Error("目标品牌已改变，请刷新后重新核对");
+  if (review.top3 && new Set(review.top3).size !== review.top3.length)
+    throw new Error("前三品牌不能重复");
+  store.db
+    .prepare(
+      "INSERT INTO baseline_reviews(task_id,payload,updated_at) VALUES(?,?,?) ON CONFLICT(task_id) DO UPDATE SET payload=excluded.payload,updated_at=excluded.updated_at",
+    )
+    .run(task.id, JSON.stringify(review), new Date().toISOString());
+  return { ok: true };
 });
 app.post("/api/batches", async (req) => {
   if (runner.busy || store.hasUnfinished())

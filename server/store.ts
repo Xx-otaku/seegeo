@@ -21,11 +21,11 @@ export class Store {
     const version = Number(
       this.db.prepare("PRAGMA user_version").get()!.user_version,
     );
-    if (version > 3) throw new Error("数据库版本高于当前程序，请升级程序");
-    if (version > 0 && version < 3 && databasePath !== ":memory:") {
+    if (version > 4) throw new Error("数据库版本高于当前程序，请升级程序");
+    if (version > 0 && version < 4 && databasePath !== ":memory:") {
       const backupDir = join(dirname(databasePath), "backups");
       mkdirSync(backupDir, { recursive: true, mode: 0o700 });
-      const backup = join(backupDir, `before-v3-${Date.now()}.sqlite`);
+      const backup = join(backupDir, `before-v4-${Date.now()}.sqlite`);
       this.db.exec(`VACUUM INTO '${backup.replaceAll("'", "''")}'`);
       chmodSync(backup, 0o600);
     }
@@ -62,6 +62,12 @@ export class Store {
       this.transaction(() => {
         this.db.exec(
           "ALTER TABLE tasks ADD COLUMN deleted_at TEXT; PRAGMA user_version=3;",
+        );
+      });
+    if (version < 4)
+      this.transaction(() => {
+        this.db.exec(
+          "CREATE TABLE baseline_reviews(task_id INTEGER PRIMARY KEY REFERENCES tasks(id),payload TEXT NOT NULL,updated_at TEXT NOT NULL); PRAGMA user_version=4;",
         );
       });
     if (!this.getSetting("schedule"))
@@ -215,6 +221,9 @@ export class Store {
         throw new Error("请先完成或取消所属批次，再删除采集记录");
       const now = new Date().toISOString();
       for (const t of records) {
+        this.db
+          .prepare("DELETE FROM baseline_reviews WHERE task_id=?")
+          .run(t!.id);
         // Retain only the question/platform snapshot for whole-batch reruns.
         this.db.prepare("DELETE FROM task_attempts WHERE task_id=?").run(t!.id);
         this.db

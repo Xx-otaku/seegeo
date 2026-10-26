@@ -73,6 +73,7 @@ export interface Task {
   finished_at: string | null;
   error: string | null;
   diagnostic: string | null;
+  can_delete?: boolean;
   interruption_reason: string | null;
   interrupted_at: string | null;
 }

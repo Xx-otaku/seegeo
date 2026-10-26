@@ -159,7 +159,7 @@ test("v1迁移备份数据库并将三条手动暂停遗留项纳入恢复，旧
     });
   store.setSetting("paused", true);
   store.db.exec(
-    "DROP TABLE task_attempts; ALTER TABLE tasks DROP COLUMN deleted_at; ALTER TABLE batches DROP COLUMN control_state; ALTER TABLE batches DROP COLUMN resume_task_id; ALTER TABLE batches DROP COLUMN parent_batch_id; ALTER TABLE tasks DROP COLUMN interruption_reason; ALTER TABLE tasks DROP COLUMN interrupted_at; PRAGMA user_version=1;",
+    "DROP TABLE task_attempts; DROP TABLE baseline_reviews; ALTER TABLE tasks DROP COLUMN deleted_at; ALTER TABLE batches DROP COLUMN control_state; ALTER TABLE batches DROP COLUMN resume_task_id; ALTER TABLE batches DROP COLUMN parent_batch_id; ALTER TABLE tasks DROP COLUMN interruption_reason; ALTER TABLE tasks DROP COLUMN interrupted_at; PRAGMA user_version=1;",
   );
   store.close();
   store = new Store(path);

@@ -1,7 +1,7 @@
 import { before, after, test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, type ChildProcess } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:net";
@@ -172,7 +172,10 @@ test("批次取消接口可在暂停状态直接调用，保留成功结果并�
   assert.equal(after.activeBatch, null);
   assert.equal(after.controls.start.enabled, true);
   assert.equal(after.paused, false);
-  assert.deepEqual((await request("/results")).data, before);
+  assert.deepEqual(
+    (await request("/results")).data.map(({ can_delete, ...t }: any) => t),
+    before.map(({ can_delete, ...t }: any) => t),
+  );
 });
 
 test("批量删除API验证空列表与非法范围，成功后只移出问题库", async () => {
@@ -204,7 +207,12 @@ test("批量删除API验证空列表与非法范围，成功后只移出问题�
     !(await request("/questions")).data.some((q: any) => ids.includes(q.id)),
   );
   assert.equal((await request("/questions/" + ids[0])).data.enabled, 0);
-  assert.equal((await request("/state")).data.version, "0.2.1");
+  assert.equal(
+    (await request("/state")).data.version,
+    JSON.parse(
+      readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+    ).version,
+  );
 });
 test("采集记录批量删除API拒绝非法范围，并从详情、导出和最新结果移除", async () => {
   const rows = (await request("/results")).data;
@@ -229,4 +237,118 @@ test("采集记录批量删除API拒绝非法范围，并从详情、导出和�
   assert.equal((await request("/results/" + task.id)).status, 404);
   assert.equal((await request("/export/results.json")).data.results.length, 0);
   assert.equal((await request("/questions")).data.length, count);
+});
+test("基线API配置重算历史、记录核对、分平台时间筛选、导出和删除联动", async () => {
+  const s = new Store(join(dir, "seegeo.sqlite"));
+  s.importQuestions([{ text: "品牌测试", group_name: "基线" }]);
+  const q = s.questions().find((q) => q.text === "品牌测试")!;
+  const b = s.createBatch("test", ["doubao"], [q.id]);
+  const t = s.tasks({ batchId: b })[0];
+  s.completeTask(t.id, {
+    answer: "1. 鑫君威\n2. 三棵树\n3. 嘉宝莉",
+    html: "<p>鑫君威</p>",
+    sources: [
+      {
+        kind: "citation",
+        url: "https://source.example/a",
+        site: "source.example",
+        title: "来源",
+        order: 1,
+        snippet: "",
+      },
+    ],
+    sourceStatus: "extracted",
+    mode: { search: "auto", thinking: false, searchTriggered: true },
+    model: null,
+    conversationUrl: "https://www.doubao.com/chat/123",
+    startedAt: "2026-10-26T01:00:00.000Z",
+    finishedAt: "2026-10-26T01:01:00.000Z",
+  });
+  s.db
+    .prepare(
+      "UPDATE batches SET finished_at=?,control_state='completed' WHERE id=?",
+    )
+    .run(new Date().toISOString(), b);
+  s.close();
+  assert.equal((await request("/baseline")).data.scope.answers, 1);
+  assert.equal(
+    (await request("/baseline?platform=deepseek")).data.scope.answers,
+    0,
+  );
+  assert.equal(
+    (await request("/baseline?from=2026-10-27T00:00:00Z")).data.scope.answers,
+    0,
+  );
+  const config = {
+    brands: [
+      { name: "鑫君威", aliases: ["XJW"] },
+      { name: "三棵树", aliases: [] },
+      { name: "嘉宝莉", aliases: [] },
+    ],
+  };
+  assert.equal(
+    (await request("/baseline/config", config, "PATCH")).status,
+    200,
+  );
+  const bad = await request(
+    "/baseline/config",
+    {
+      brands: [
+        { name: "甲", aliases: ["相同"] },
+        { name: "乙", aliases: ["相同"] },
+      ],
+    },
+    "PATCH",
+  );
+  assert.equal(bad.status, 400);
+  assert.equal(
+    (
+      await request(
+        `/baseline/reviews/${t.id}`,
+        {
+          target: "鑫君威",
+          sentiment: "positive",
+          top3: ["鑫君威", "三棵树"],
+          note: "人工核对",
+        },
+        "PUT",
+      )
+    ).status,
+    200,
+  );
+  let r = (await request("/baseline")).data;
+  assert.equal(r.sentiment.positive, 1);
+  assert.equal(r.brands[0].top3Rate, 1);
+  assert.equal(r.websites[0].share, 1);
+  await request(
+    "/baseline/config",
+    { brands: [{ name: "嘉宝莉", aliases: [] }, ...config.brands.slice(0, 2)] },
+    "PATCH",
+  );
+  r = (await request("/baseline/export")).data;
+  assert.equal(r.scope.target, "嘉宝莉");
+  assert.equal(r.sentiment.positive, 0);
+  assert.equal(r.sentiment.unreviewed, 1);
+  assert.equal(
+    (
+      await request(
+        `/baseline/reviews/${t.id}`,
+        { target: "鑫君威", sentiment: "negative" },
+        "PUT",
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (await request("/results/bulk-delete", { taskIds: [t.id] })).status,
+    200,
+  );
+  assert.equal((await request("/baseline")).data.scope.answers, 0);
+  const check = new Store(join(dir, "seegeo.sqlite"));
+  assert.equal(
+    check.db.prepare("SELECT count(*) count FROM baseline_reviews").get()!
+      .count,
+    0,
+  );
+  check.close();
 });
