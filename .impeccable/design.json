@@ -106,7 +106,7 @@
       "refersTo": "button-primary",
       "description": "开始采集、保存等主操作。",
       "html": "<button class=\"ds-button ds-primary\">开始一轮</button>",
-      "css": ".ds-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;background:white;border:1px solid #cfd8cd;border-radius:6px;padding:10px 14px;font-size:12px;line-height:18px;white-space:nowrap;cursor:pointer;transition:background .15s,border-color .15s;font-family:\"Avenir Next\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;}.ds-button:hover:not(:disabled){background:#eef3e9;border-color:#b3c4b0}.ds-button:focus-visible{outline:2px solid var(--focus, #498167);outline-offset:3px}.ds-button:disabled{cursor:not-allowed;opacity:.5}.ds-primary{color:var(--paper, #fff);background:var(--green, #226b53);border-color:var(--green, #226b53)}.ds-primary:hover:not(:disabled){background:#18563f}@media(prefers-reduced-motion:reduce){.ds-button,.ds-nav-item{transition:none!important}}"
+      "css": ".ds-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;background:white;border:1px solid #cfd8cd;border-radius:6px;padding:10px 14px;font-size:12px;line-height:18px;white-space:nowrap;cursor:pointer;transition:background .15s,border-color .15s;font-family:\"Avenir Next\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;}.ds-button:hover:not(:disabled){background:#eef3e9;border-color:#b3c4b0}.ds-button:focus-visible{outline:2px solid #498167;outline-offset:3px}.ds-button:disabled{cursor:not-allowed;opacity:.5}.ds-primary{color:var(--paper, #fff);background:var(--green, #226b53);border-color:var(--green, #226b53)}.ds-primary:hover:not(:disabled){background:#18563f}@media(prefers-reduced-motion:reduce){.ds-button,.ds-nav-item{transition:none!important}}"
     },
     {
       "name": "次要按钮",
@@ -114,7 +114,7 @@
       "refersTo": "button-secondary",
       "description": "导入、取消等普通操作。",
       "html": "<button class=\"ds-button\">导入问题</button>",
-      "css": ".ds-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;background:white;border:1px solid #cfd8cd;border-radius:6px;padding:10px 14px;font-size:12px;line-height:18px;white-space:nowrap;cursor:pointer;transition:background .15s,border-color .15s;font-family:\"Avenir Next\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;}.ds-button:hover:not(:disabled){background:#eef3e9;border-color:#b3c4b0}.ds-button:focus-visible{outline:2px solid var(--focus, #498167);outline-offset:3px}.ds-button:disabled{cursor:not-allowed;opacity:.5}@media(prefers-reduced-motion:reduce){.ds-button,.ds-nav-item{transition:none!important}}"
+      "css": ".ds-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;background:white;border:1px solid #cfd8cd;border-radius:6px;padding:10px 14px;font-size:12px;line-height:18px;white-space:nowrap;cursor:pointer;transition:background .15s,border-color .15s;font-family:\"Avenir Next\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;}.ds-button:hover:not(:disabled){background:#eef3e9;border-color:#b3c4b0}.ds-button:focus-visible{outline:2px solid #498167;outline-offset:3px}.ds-button:disabled{cursor:not-allowed;opacity:.5}@media(prefers-reduced-motion:reduce){.ds-button,.ds-nav-item{transition:none!important}}"
     },
     {
       "name": "危险按钮",
@@ -122,7 +122,7 @@
       "refersTo": "button-danger",
       "description": "退出服务等危险操作。",
       "html": "<button class=\"ds-button ds-danger\">退出服务</button>",
-      "css": ".ds-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;background:white;border:1px solid #cfd8cd;border-radius:6px;padding:10px 14px;font-size:12px;line-height:18px;white-space:nowrap;cursor:pointer;transition:background .15s,border-color .15s;font-family:\"Avenir Next\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;}.ds-button:hover:not(:disabled){background:#eef3e9;border-color:#b3c4b0}.ds-button:focus-visible{outline:2px solid var(--focus, #498167);outline-offset:3px}.ds-button:disabled{cursor:not-allowed;opacity:.5}.ds-danger{color:var(--danger, #9b3c35)}@media(prefers-reduced-motion:reduce){.ds-button,.ds-nav-item{transition:none!important}}"
+      "css": ".ds-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;background:white;border:1px solid #cfd8cd;border-radius:6px;padding:10px 14px;font-size:12px;line-height:18px;white-space:nowrap;cursor:pointer;transition:background .15s,border-color .15s;font-family:\"Avenir Next\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;}.ds-button:hover:not(:disabled){background:#eef3e9;border-color:#b3c4b0}.ds-button:focus-visible{outline:2px solid #498167;outline-offset:3px}.ds-button:disabled{cursor:not-allowed;opacity:.5}.ds-danger{color:var(--danger, #9b3c35)}@media(prefers-reduced-motion:reduce){.ds-button,.ds-nav-item{transition:none!important}}"
     },
     {
       "name": "文本按钮",
@@ -130,7 +130,7 @@
       "refersTo": "button-text",
       "description": "轻量链接式操作。",
       "html": "<button class=\"ds-text\">添加问题</button>",
-      "css": ".ds-text{display:inline-flex;align-items:center;gap:5px;font-size:12px;line-height:1.5;color:var(--green, #226b53);border:0;background:none;padding:0;cursor:pointer;font-family:\"Avenir Next\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;}.ds-text:hover{color:#103f30;text-decoration:underline}.ds-text:focus-visible{outline:2px solid var(--focus, #498167);outline-offset:3px}"
+      "css": ".ds-text{display:inline-flex;align-items:center;gap:5px;font-size:12px;line-height:1.5;color:var(--green, #226b53);border:0;background:none;padding:0;cursor:pointer;font-family:\"Avenir Next\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;}.ds-text:hover{color:#103f30;text-decoration:underline}.ds-text:focus-visible{outline:2px solid #498167;outline-offset:3px}"
     },
     {
       "name": "搜索输入",
@@ -146,7 +146,7 @@
       "refersTo": "nav-item",
       "description": "深松绿区域中的当前与普通入口。",
       "html": "<nav class=\"ds-nav\" aria-label=\"主导航\"><button class=\"ds-nav-item ds-active\">问题库</button><button class=\"ds-nav-item\">采集记录</button></nav>",
-      "css": ".ds-nav{display:flex;flex-direction:column;gap:7px;background:var(--pine, #143d36);padding:18px;width:184px;font-family:\"Avenir Next\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;}.ds-nav-item{display:flex;align-items:center;gap:12px;padding:12px 15px;border:0;border-radius:6px;background:none;color:#cfddd3;text-align:left;font:inherit;font-size:14px;cursor:pointer;transition:background .15s}.ds-nav-item:hover{background:#214c43}.ds-nav-item.ds-active{color:#f5ffed;background:#2d5548}.ds-nav-item:focus-visible{outline:2px solid var(--focus, #498167);outline-offset:3px}@media(prefers-reduced-motion:reduce){.ds-button,.ds-nav-item{transition:none!important}}"
+      "css": ".ds-nav{display:flex;flex-direction:column;gap:7px;background:var(--pine, #143d36);padding:18px;width:184px;font-family:\"Avenir Next\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;}.ds-nav-item{display:flex;align-items:center;gap:12px;padding:12px 15px;border:0;border-radius:6px;background:none;color:#cfddd3;text-align:left;font:inherit;font-size:14px;cursor:pointer;transition:background .15s}.ds-nav-item:hover{background:#214c43}.ds-nav-item.ds-active{color:#f5ffed;background:#2d5548}.ds-nav-item:focus-visible{outline:2px solid #498167;outline-offset:3px}@media(prefers-reduced-motion:reduce){.ds-button,.ds-nav-item{transition:none!important}}"
     },
     {
       "name": "状态徽章",
@@ -170,7 +170,7 @@
       "refersTo": "run-strip",
       "description": "浅绿运行面与右侧主操作。",
       "html": "<section class=\"ds-run\"><div><strong>准备好下一轮监测</strong><p>自动监测已关闭，仍可手动采集</p></div><button class=\"ds-button ds-primary\">开始一轮</button></section>",
-      "css": ".ds-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;background:white;border:1px solid #cfd8cd;border-radius:6px;padding:10px 14px;font-size:12px;line-height:18px;white-space:nowrap;cursor:pointer;transition:background .15s,border-color .15s;font-family:\"Avenir Next\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;}.ds-button:hover:not(:disabled){background:#eef3e9;border-color:#b3c4b0}.ds-button:focus-visible{outline:2px solid var(--focus, #498167);outline-offset:3px}.ds-button:disabled{cursor:not-allowed;opacity:.5}.ds-primary{color:var(--paper, #fff);background:var(--green, #226b53);border-color:var(--green, #226b53)}.ds-primary:hover:not(:disabled){background:#18563f}.ds-run{display:flex;align-items:center;justify-content:space-between;gap:20px;background:#edf3e7;border:1px solid #dbe5d3;border-radius:8px;padding:21px 23px;font-family:\"Avenir Next\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;}.ds-run strong{font-size:14px;font-weight:600}.ds-run p{font-size:11px;color:#60745a;margin:5px 0 0;line-height:1.7}@media(max-width:600px){.ds-run{display:block;padding:16px}.ds-run .ds-button{margin-top:18px}}@media(prefers-reduced-motion:reduce){.ds-button,.ds-nav-item{transition:none!important}}"
+      "css": ".ds-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;background:white;border:1px solid #cfd8cd;border-radius:6px;padding:10px 14px;font-size:12px;line-height:18px;white-space:nowrap;cursor:pointer;transition:background .15s,border-color .15s;font-family:\"Avenir Next\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;}.ds-button:hover:not(:disabled){background:#eef3e9;border-color:#b3c4b0}.ds-button:focus-visible{outline:2px solid #498167;outline-offset:3px}.ds-button:disabled{cursor:not-allowed;opacity:.5}.ds-primary{color:var(--paper, #fff);background:var(--green, #226b53);border-color:var(--green, #226b53)}.ds-primary:hover:not(:disabled){background:#18563f}.ds-run{display:flex;align-items:center;justify-content:space-between;gap:20px;background:#edf3e7;border:1px solid #dbe5d3;border-radius:8px;padding:21px 23px;font-family:\"Avenir Next\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;}.ds-run strong{font-size:14px;font-weight:600}.ds-run p{font-size:11px;color:#60745a;margin:5px 0 0;line-height:1.7}@media(max-width:600px){.ds-run{display:block;padding:16px}.ds-run .ds-button{margin-top:18px}}@media(prefers-reduced-motion:reduce){.ds-button,.ds-nav-item{transition:none!important}}"
     },
     {
       "name": "正文差异面",
