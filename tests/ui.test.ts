@@ -4,7 +4,7 @@ import { chromium, type Route } from "playwright";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { createServer } from "node:net";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Store } from "../server/store.js";
@@ -22,7 +22,8 @@ test(
     const batch = store.createBatch("test", ["doubao"]);
     const task = store.tasks()[0];
     store.completeTask(task.id, {
-      answer: "已保存的长回答\n".repeat(20),
+      answer:
+        "1. 鑫君威\n2. 三棵树\n3. 嘉宝莉\n" + "已保存的长回答\n".repeat(20),
       html: "<p>已保存的长回答</p>",
       sources: [],
       sourceStatus: "failed",
@@ -237,7 +238,11 @@ test(
       assert.ok(calls.some((x) => x.endsWith("/retry")));
       assert.ok(calls.some((x) => x.endsWith("/recover")));
       assert.equal(calls.filter((x) => x.endsWith("/login")).length, 3);
-      assert.match(await page.locator(".repo-link").innerText(), /v0\.2\.1/);
+      assert.ok(
+        (await page.locator(".repo-link").innerText()).includes(
+          `v${JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version}`,
+        ),
+      );
       await page.getByLabel("选择当前筛选的全部问题").check();
       const bulk = page.getByRole("button", {
         name: "删除所选（2）",
@@ -260,6 +265,39 @@ test(
         (await (await fetch(root + "/api/results")).json()).length,
         1,
       );
+      await page.getByRole("button", { name: "基线分析", exact: true }).click();
+      await page
+        .getByRole("heading", { name: "品牌表现", exact: true })
+        .waitFor();
+      await page
+        .getByRole("button", { name: "品牌与竞品配置", exact: true })
+        .click();
+      await page.getByLabel("目标品牌", { exact: true }).fill("鑫君威");
+      await page.getByLabel("品牌别名 1", { exact: true }).fill("XJW,君威");
+      await page
+        .getByRole("button", { name: "保存品牌配置", exact: true })
+        .click();
+      await page.waitForTimeout(150);
+      const baseline = await (await fetch(root + "/api/baseline")).json();
+      assert.deepEqual(baseline.config.brands[0].aliases, ["XJW", "君威"]);
+      await page.getByRole("button", { name: "核对", exact: true }).click();
+      await page
+        .getByLabel("目标品牌情感", { exact: true })
+        .selectOption("positive");
+      await page.getByLabel("排名判定", { exact: true }).selectOption("known");
+      await page
+        .getByLabel("前三品牌", { exact: true })
+        .fill("鑫君威、三棵树、嘉宝莉");
+      await page.getByRole("button", { name: "保存核对", exact: true }).click();
+      await page.waitForTimeout(150);
+      assert.equal(
+        (await (await fetch(root + "/api/baseline")).json()).sentiment.positive,
+        1,
+      );
+      await page.getByLabel("基线平台").selectOption("deepseek");
+      await page
+        .getByRole("heading", { name: "暂无可统计的完整回答", exact: true })
+        .waitFor();
       await page.getByRole("button", { name: "采集记录", exact: true }).click();
       await page.getByLabel("选择当前筛选的可删除记录").check();
       page.once("dialog", (d) => d.accept());

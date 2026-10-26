@@ -8,6 +8,7 @@ import {
   type FormEvent,
 } from "react";
 import {
+  BarChart3,
   ArrowDownToLine,
   ArrowLeft,
   ArrowRight,
@@ -37,6 +38,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { diffLines } from "diff";
+import Baseline from "./Baseline";
 import { readingText } from "./reading";
 import {
   platformIds,
@@ -170,7 +172,7 @@ export default function App() {
   const [state, setState] = useState<State | null>(null),
     [questions, setQuestions] = useState<Q[]>([]),
     [view, setView] = useState<
-      "questions" | "records" | "compare" | "settings"
+      "questions" | "records" | "compare" | "baseline" | "settings"
     >("questions");
   const [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
@@ -268,6 +270,7 @@ export default function App() {
                 { id: "questions", icon: ListChecks, label: "问题库" },
                 { id: "records", icon: FolderOpen, label: "采集记录" },
                 { id: "compare", icon: GitCompareArrows, label: "历史对照" },
+                { id: "baseline", icon: BarChart3, label: "基线分析" },
                 { id: "settings", icon: Settings2, label: "运行设置" },
               ] as const
             ).map((n) => (
@@ -323,13 +326,15 @@ export default function App() {
               个人工作区{" "}
               <span className="muted">
                 /{" "}
-                {view === "settings"
-                  ? "运行设置"
-                  : view === "records"
-                    ? "采集记录"
-                    : view === "compare"
-                      ? "历史对照"
-                      : "问题库"}
+                {view === "baseline"
+                  ? "基线分析"
+                  : view === "settings"
+                    ? "运行设置"
+                    : view === "records"
+                      ? "采集记录"
+                      : view === "compare"
+                        ? "历史对照"
+                        : "问题库"}
               </span>
             </span>
             <span className="service-state">
@@ -385,22 +390,26 @@ export default function App() {
                 <header className="page-heading">
                   <div>
                     <h1>
-                      {view === "questions"
-                        ? "问题监测"
-                        : view === "records"
-                          ? "采集记录"
-                          : view === "compare"
-                            ? "回答怎样变化？"
-                            : "运行设置"}
+                      {view === "baseline"
+                        ? "基线分析"
+                        : view === "questions"
+                          ? "问题监测"
+                          : view === "records"
+                            ? "采集记录"
+                            : view === "compare"
+                              ? "回答怎样变化？"
+                              : "运行设置"}
                     </h1>
                     <p>
-                      {view === "questions"
-                        ? "用同一组问题，持续观察三个平台的回答与引用。"
-                        : view === "records"
-                          ? "每次采集都有记录，未完成的结果也如实保留。"
-                          : view === "compare"
-                            ? "选择一个问题，核对不同时点的正文与来源。"
-                            : "设定采集节奏，管理独立浏览器与本机服务。"}
+                      {view === "baseline"
+                        ? "用实际回答与引用建立品牌基线，保留统计口径和未知项。"
+                        : view === "questions"
+                          ? "用同一组问题，持续观察三个平台的回答与引用。"
+                          : view === "records"
+                            ? "每次采集都有记录，未完成的结果也如实保留。"
+                            : view === "compare"
+                              ? "选择一个问题，核对不同时点的正文与来源。"
+                              : "设定采集节奏，管理独立浏览器与本机服务。"}
                     </p>
                   </div>
                   <div className="heading-actions">
@@ -413,7 +422,7 @@ export default function App() {
                         导入问题
                       </button>
                     )}
-                    {view !== "settings" && (
+                    {view !== "settings" && view !== "baseline" && (
                       <div className="export-control">
                         <ArrowDownToLine size={16} />
                         <select
@@ -906,6 +915,20 @@ export default function App() {
                       </p>
                     </div>
                   </div>
+                )}
+                {view === "baseline" && (
+                  <Baseline
+                    request={api}
+                    act={act}
+                    busy={busy}
+                    onRead={(id) =>
+                      void act(async () => {
+                        const task = await api<Task>(`/results/${id}`);
+                        setInitialTask(task);
+                        setDetail(task.question_id);
+                      })
+                    }
+                  />
                 )}
                 {view === "settings" && state && (
                   <Settings state={state} act={act} />
@@ -1712,6 +1735,7 @@ function Records({
     return () => clearInterval(i);
   }, [query]);
   const deletable = (t: Task) =>
+    t.can_delete ??
     Boolean(state?.batches.find((b) => b.id === t.batch_id)?.finished_at);
   const available = tasks.filter(deletable);
   return (
