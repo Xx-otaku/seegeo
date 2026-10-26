@@ -1,0 +1,17 @@
+node_modules/
+.runtime/
+dist/
+.DS_Store
+.env*
+!.env.example
+*.sqlite*
+*.db*
+*.log
+data/
+profiles/
+diagnostics/
+test-results/
+.impeccable/review/
+.impeccable/mocks/
+.impeccable/build/
+.impeccable/questions/
