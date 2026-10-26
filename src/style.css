@@ -2106,3 +2106,19 @@ tbody tr.selected {
     margin-top: 26px;
   }
 }
+
+.baseline-samples table {
+  min-width: 1050px;
+}
+.baseline-samples .question-link {
+  min-width: 240px;
+  max-width: 360px;
+}
+.baseline-review {
+  scroll-margin-top: 190px;
+}
+@media (max-width: 760px) {
+  .baseline-review {
+    scroll-margin-top: 205px;
+  }
+}

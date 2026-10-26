@@ -180,3 +180,12 @@ test("别名去重和英文边界避免虚高，拒绝跨品牌共用同一别�
     false,
   );
 });
+test("人工排名支持配置别名，英文榜单品牌前缀不能误匹配长单词", () => {
+  const c = { brands: [{ name: "鑫君威", aliases: ["XJW"] }] };
+  const review = reviewSchema.parse({ target: "鑫君威", top3: ["xjw"] });
+  assert.equal(
+    buildBaseline([task(1, "鑫君威")], c, { "1": review }).brands[0].top3Rate,
+    1,
+  );
+  assert.equal(buildBaseline([task(1, "1. XJWPLUS 型号")], c).scope.ranked, 0);
+});

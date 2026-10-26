@@ -209,7 +209,8 @@ function automaticRanking(answer: string, config: BaselineConfig) {
         [b.name, ...b.aliases].some(
           (alias) =>
             lead.startsWith(normalized(alias)) &&
-            occurrences(lead, [alias]) > 0,
+            (!/[a-z0-9]$/.test(normalized(alias)) ||
+              !/[a-z0-9]/.test(lead[normalized(alias).length] || "")),
         )
       )
         ranks.set(b.name, Math.min(ranks.get(b.name) ?? 99, rank));
@@ -260,9 +261,18 @@ export function buildBaseline(
       count: occurrences(t.answer!, [b.name, ...b.aliases]),
     }));
     const review = reviews[String(t.id)];
-    const top3 = review?.rankingNotApplicable
+    let top3 = review?.rankingNotApplicable
       ? null
       : (review?.top3 ?? automaticRanking(t.answer!, config));
+    if (top3)
+      top3 = top3.map(
+        (name) =>
+          config.brands.find((b) =>
+            [b.name, ...b.aliases].some(
+              (a) => normalized(a) === normalized(name),
+            ),
+          )?.name || name,
+      );
     if (review?.rankingNotApplicable) notApplicable++;
     else if (top3 !== null) ranked++;
     const targetMentioned = mentions[0].count > 0;

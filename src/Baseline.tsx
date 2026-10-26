@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import {
   Plus,
   Trash2,
@@ -60,6 +60,7 @@ export default function Baseline({
       null,
     ),
     [showConfig, setShowConfig] = useState(false);
+  const loadId = useRef(0);
   const [aliasEdits, setAliasEdits] = useState<Record<number, string>>({});
   const params = new URLSearchParams({ sourceKind });
   if (platform) params.set("platform", platform);
@@ -69,16 +70,18 @@ export default function Baseline({
   if (to) params.set("to", new Date(to + "T23:59:59+08:00").toISOString());
   const query = params.toString();
   const load = useCallback(async () => {
+    const id = ++loadId.current;
     setLoading(true);
     try {
       const r = await request<BaselineReport>("/baseline?" + query);
+      if (id !== loadId.current) return;
       setReport(r);
       setDraft((old) => old || r.config);
       setError("");
     } catch (e) {
-      setError((e as Error).message);
+      if (id === loadId.current) setError((e as Error).message);
     } finally {
-      setLoading(false);
+      if (id === loadId.current) setLoading(false);
     }
   }, [request, query]);
   useEffect(() => {
@@ -357,11 +360,17 @@ export default function Baseline({
                       </td>
                       <td>{percent(b.mentionRate)}</td>
                       <td>{b.mentions}</td>
-                      <td>{percent(b.voiceShare)}</td>
+                      <td>
+                        {scope!.totalMentions
+                          ? percent(b.voiceShare)
+                          : "无品牌提及"}
+                      </td>
                       <td>
                         {b.top3Count} / {scope!.ranked}
                       </td>
-                      <td>{percent(b.top3Rate)}</td>
+                      <td>
+                        {b.top3Rate === null ? "未判定" : percent(b.top3Rate)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -484,7 +493,7 @@ export default function Baseline({
               </table>
             </div>
           </section>
-          <section className="baseline-section">
+          <section className="baseline-section baseline-samples">
             <h2>样本明细与人工核对</h2>
             <p className="baseline-method">
               时间为实际采集时间（北京时间）。情感针对“{scope!.target}”；TOP3
@@ -614,6 +623,10 @@ function ReviewEditor({
   onClose: () => void;
   onSave: (review: BaselineReview) => Promise<void>;
 }) {
+  const formRef = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    formRef.current?.scrollIntoView({ block: "start" });
+  }, []);
   const [sentiment, setSentiment] = useState(
       row.review?.target === target ? row.review.sentiment || "" : "",
     ),
@@ -628,6 +641,7 @@ function ReviewEditor({
     [note, setNote] = useState(row.review?.note || "");
   return (
     <form
+      ref={formRef}
       className="inline-panel baseline-review"
       onSubmit={(e) => {
         e.preventDefault();
