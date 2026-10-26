@@ -189,6 +189,16 @@ export class Store {
       .prepare("UPDATE questions SET deleted_at=?,enabled=0 WHERE id=?")
       .run(new Date().toISOString(), id);
   }
+  deleteQuestions(ids: number[]) {
+    return this.transaction(() => {
+      const unique = [...new Set(ids)];
+      const existing = new Set(this.questions().map((q) => q.id));
+      if (unique.some((id) => !existing.has(id)))
+        throw new Error("部分问题已不存在，请刷新列表后重试");
+      for (const id of unique) this.deleteQuestion(id);
+      return unique.length;
+    });
+  }
   createBatch(
     trigger: string,
     platforms: Platform[] = [...platformIds],

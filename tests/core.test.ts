@@ -181,3 +181,42 @@ test("v1迁移备份数据库并将三条手动暂停遗留项纳入恢复，旧
   store.close();
   rmSync(dir, { recursive: true, force: true });
 });
+
+test("批量移除校验完整范围、去重并保留历史快照和已保存答案", () => {
+  const s = new Store(":memory:");
+  s.importQuestions([
+    { text: "保留历史甲" },
+    { text: "移除乙" },
+    { text: "保留丙" },
+  ]);
+  const ids = s.questions().map((q) => q.id),
+    batch = s.createBatch("manual", ["doubao"]);
+  const task = s
+    .tasks({ batchId: batch })
+    .find((t) => t.question_id === ids[0])!;
+  s.patchTask(task.id, {
+    answer: "历史回答",
+    sources: [
+      {
+        kind: "citation",
+        url: "https://example.com/source",
+        title: "旧来源",
+        site: "example.com",
+        order: 1,
+        snippet: "",
+      },
+    ],
+  });
+  assert.throws(() => s.deleteQuestions([ids[0], 9999]), /不存在/);
+  assert.equal(s.questions().length, 3, "范围无效时不能部分删除");
+  assert.equal(s.deleteQuestions([ids[0], ids[1], ids[0]]), 2);
+  assert.deepEqual(
+    s.questions().map((q) => q.id),
+    [ids[2]],
+  );
+  assert.equal(s.task(task.id)?.answer, "历史回答");
+  assert.equal(s.task(task.id)?.sources[0].title, "旧来源");
+  assert.equal(s.tasks({ batchId: batch }).length, 3);
+  assert.ok(s.question(ids[0]));
+  s.close();
+});

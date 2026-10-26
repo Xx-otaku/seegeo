@@ -154,7 +154,7 @@ test(
         .getByRole("heading", { name: "问题监测", exact: true })
         .waitFor();
       await page.getByRole("button", { name: "导入问题", exact: true }).click();
-      await page.getByLabel("问题内容").fill("新增测试问题");
+      await page.getByLabel("问题内容").fill("新增测试问题\n批量待移除问题");
       await page
         .getByRole("button", { name: "导入问题", exact: true })
         .last()
@@ -237,6 +237,29 @@ test(
       assert.ok(calls.some((x) => x.endsWith("/retry")));
       assert.ok(calls.some((x) => x.endsWith("/recover")));
       assert.equal(calls.filter((x) => x.endsWith("/login")).length, 3);
+      assert.match(await page.locator(".repo-link").innerText(), /v0\.2\.0/);
+      await page.getByLabel("选择当前筛选的全部问题").check();
+      const bulk = page.getByRole("button", {
+        name: "删除所选（2）",
+        exact: true,
+      });
+      await bulk.waitFor();
+      page.once("dialog", (d) => d.dismiss());
+      await bulk.click();
+      assert.equal(
+        (await (await fetch(root + "/api/questions")).json()).length,
+        2,
+      );
+      page.once("dialog", (d) => d.accept());
+      await bulk.click();
+      await page
+        .getByRole("heading", { name: "先把你的问题放进来", exact: true })
+        .waitFor();
+      assert.equal(await page.locator(".selection-bar").count(), 0);
+      assert.equal(
+        (await (await fetch(root + "/api/results")).json()).length,
+        1,
+      );
       assert.deepEqual(errors, []);
       assert.equal(q.id, 1);
     } finally {

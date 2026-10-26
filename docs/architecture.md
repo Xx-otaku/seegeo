@@ -30,6 +30,7 @@ Runner 的控制命令使用串行 promise 队列；一个 worker 独占当前�
 | GET `/api/questions`、GET `/api/questions/:id` | 当前问题列表及包含归档问题的详情 |
 | POST `/api/questions/import` | `{content,format: text/csv,group}` 批量导入 |
 | PATCH/DELETE `/api/questions/:id` | 编辑、启停、移出问题库 |
+| POST `/api/questions/bulk-delete` | `{questionIds:[...]}` 批量移出，完整校验后事务更新，保留历史 |
 | POST `/api/batches` | `{platforms,questionIds?}` 创建手动任务 |
 | GET `/api/results`、GET `/api/results/:id` | 平台、问题、批次、状态及时间筛选 |
 | POST `/api/pause`、POST `/api/resume` | 暂停与继续 |

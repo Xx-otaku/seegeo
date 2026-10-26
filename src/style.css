@@ -1865,3 +1865,30 @@ tbody tr.selected {
   margin: 8px 0;
   line-height: 1.65;
 }
+
+.selection-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  padding: 12px 14px;
+  margin: 0 0 16px;
+  background: var(--blue-soft);
+  border-radius: 7px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.selection-help {
+  color: var(--muted);
+  font-size: 11px;
+  margin-right: auto;
+}
+@media (max-width: 760px) {
+  .selection-help {
+    flex-basis: 100%;
+    order: 1;
+  }
+  .selection-bar > .button {
+    margin-left: auto;
+  }
+}

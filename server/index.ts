@@ -20,6 +20,9 @@ import { recoverExisting } from "./collector.js";
 
 const app = Fastify({ bodyLimit: 2 * 1024 * 1024 });
 const token = randomBytes(24).toString("hex");
+const { version } = JSON.parse(
+  readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+) as { version: string };
 const store = new Store();
 const runner = new Runner(store);
 if (store.getSetting("allowAutoSearch") === undefined)
@@ -76,6 +79,7 @@ function filters(query: unknown) {
 }
 app.get("/api/state", () => ({
   token,
+  version,
   paused: store.getSetting("paused") || false,
   busy: runner.busy,
   currentTask: runner.current,
@@ -151,6 +155,16 @@ app.patch<{ Params: { id: string } }>("/api/questions/:id", (req) => {
 app.delete<{ Params: { id: string } }>("/api/questions/:id", (req) => {
   store.deleteQuestion(id(req.params.id));
   return { ok: true };
+});
+app.post("/api/questions/bulk-delete", (req) => {
+  const { questionIds } = z
+    .object({
+      questionIds: z.array(z.number().int().positive()).min(1).max(1000),
+    })
+    .parse(req.body);
+  const removed = store.deleteQuestions(questionIds);
+  store.event("questions", `批量移出 ${removed} 个问题，已有回答与来源保留`);
+  return { removed };
 });
 app.get("/api/results", (req) =>
   store.tasks({ ...filters(req.query), limit: 500 }),

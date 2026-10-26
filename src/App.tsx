@@ -77,6 +77,7 @@ type Batch = {
   parent_batch_id: number | null;
 };
 type State = {
+  version: string;
   activeBatch: Batch | null;
   displayBatch: Batch | null;
   pausedTask: Pick<Task, "id" | "platform" | "question_text" | "phase"> | null;
@@ -194,6 +195,9 @@ export default function App() {
       sessionToken = s.token;
       setState(s);
       setQuestions(q);
+      setSelected((ids) =>
+        ids.filter((id) => q.some((item) => item.id === id)),
+      );
     } catch (e) {
       setError((e as Error).message);
     }
@@ -308,7 +312,8 @@ export default function App() {
               target="_blank"
               rel="noreferrer"
             >
-              seegeo v0.1 <ExternalLink size={12} />
+              seegeo {state ? `v${state.version}` : "读取版本…"}{" "}
+              <ExternalLink size={12} />
             </a>
           </div>
         </aside>
@@ -515,6 +520,55 @@ export default function App() {
                         <Plus size={15} /> 添加问题
                       </button>
                     </div>
+                    {selected.length > 0 && (
+                      <div className="selection-bar" aria-label="批量问题操作">
+                        <span>
+                          已选 {selected.length} 个问题
+                          {selected.some(
+                            (id) => !filtered.some((q) => q.id === id),
+                          )
+                            ? `（含当前筛选外 ${selected.filter((id) => !filtered.some((q) => q.id === id)).length} 个）`
+                            : ""}
+                        </span>
+                        <span className="selection-help">
+                          仅移出问题库，已有回答和来源保留。
+                        </span>
+                        <button
+                          className="text-button"
+                          onClick={() => setSelected([])}
+                        >
+                          取消选择
+                        </button>
+                        <button
+                          className="button danger"
+                          disabled={busy}
+                          onClick={async () => {
+                            const ids = [...selected];
+                            if (
+                              !window.confirm(
+                                `从问题库删除所选 ${ids.length} 个问题？已有回答、来源和批次记录会保留。`,
+                              )
+                            )
+                              return;
+                            if (
+                              await act(
+                                () =>
+                                  api("/questions/bulk-delete", {
+                                    questionIds: ids,
+                                  }),
+                                `已删除 ${ids.length} 个问题，历史记录保留`,
+                              )
+                            ) {
+                              setSelected([]);
+                              if (edit && ids.includes(edit.id)) setEdit(null);
+                            }
+                          }}
+                        >
+                          <Trash2 size={14} />
+                          删除所选（{selected.length}）
+                        </button>
+                      </div>
+                    )}
                     <div className="filters">
                       <label className="search-box">
                         <Search size={17} />

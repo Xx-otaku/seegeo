@@ -174,3 +174,35 @@ test("批次取消接口可在暂停状态直接调用，保留成功结果并�
   assert.equal(after.paused, false);
   assert.deepEqual((await request("/results")).data, before);
 });
+
+test("批量删除API验证空列表与非法范围，成功后只移出问题库", async () => {
+  await request("/questions/import", {
+    format: "text",
+    content: "批量删除甲\n批量删除乙",
+  });
+  const questions = (await request("/questions")).data;
+  const ids = questions
+    .filter((q: any) => q.text.startsWith("批量删除"))
+    .map((q: any) => q.id);
+  assert.equal(ids.length, 2);
+  assert.equal(
+    (await request("/questions/bulk-delete", { questionIds: [] })).status,
+    400,
+  );
+  assert.equal(
+    (await request("/questions/bulk-delete", { questionIds: [ids[0], 999999] }))
+      .status,
+    404,
+  );
+  assert.equal((await request("/questions")).data.length, questions.length);
+  const result = await request("/questions/bulk-delete", {
+    questionIds: [...ids, ids[0]],
+  });
+  assert.equal(result.status, 200);
+  assert.equal(result.data.removed, 2);
+  assert.ok(
+    !(await request("/questions")).data.some((q: any) => ids.includes(q.id)),
+  );
+  assert.equal((await request("/questions/" + ids[0])).data.enabled, 0);
+  assert.equal((await request("/state")).data.version, "0.2.0");
+});
