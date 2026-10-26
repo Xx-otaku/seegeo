@@ -1,4 +1,12 @@
-import { useState, useEffect, useCallback, useRef, createContext, useContext, type FormEvent } from "react";
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  createContext,
+  useContext,
+  type FormEvent,
+} from "react";
 import {
   ArrowDownToLine,
   ArrowLeft,
@@ -71,9 +79,12 @@ type Batch = {
 type State = {
   activeBatch: Batch | null;
   displayBatch: Batch | null;
-  pausedTask: Pick<Task,"id"|"platform"|"question_text"|"phase"> | null;
+  pausedTask: Pick<Task, "id" | "platform" | "question_text" | "phase"> | null;
   currentItem: Task | null;
-  controls: Record<"start"|"pause"|"resume"|"cancel"|"rerun",{enabled:boolean;reason:string|null}>;
+  controls: Record<
+    "start" | "pause" | "resume" | "cancel" | "rerun",
+    { enabled: boolean; reason: string | null }
+  >;
   token: string;
   paused: boolean;
   busy: boolean;
@@ -148,10 +159,13 @@ async function api<T = any>(
   return data;
 }
 
-const OperationContext = createContext<{busy:boolean;state:State|null}>({busy:false,state:null});
+const OperationContext = createContext<{ busy: boolean; state: State | null }>({
+  busy: false,
+  state: null,
+});
 
 export default function App() {
-  const actionLock=useRef(false);
+  const actionLock = useRef(false);
   const [state, setState] = useState<State | null>(null),
     [questions, setQuestions] = useState<Q[]>([]),
     [view, setView] = useState<
@@ -191,7 +205,7 @@ export default function App() {
   }, [refresh]);
   async function act(fn: () => Promise<unknown>, message = "") {
     if (actionLock.current) return false;
-    actionLock.current=true;
+    actionLock.current = true;
     setBusy(true);
     setError("");
     try {
@@ -203,7 +217,7 @@ export default function App() {
       setError((e as Error).message);
       return false;
     } finally {
-      actionLock.current=false;
+      actionLock.current = false;
       setBusy(false);
     }
   }
@@ -234,621 +248,784 @@ export default function App() {
     if (format) window.location.assign(`/api/export/${format}${query}`);
   }
   return (
-    <OperationContext.Provider value={{busy,state}}>
-    <div className="app-shell">
-      <aside className="sidebar">
-        <a className="brand" href="/" aria-label="seegeo 首页">
-          <Layers3 size={25} strokeWidth={1.7} />
-          <span>
-            seegeo<span className="brand-period">.</span>
-          </span>
-        </a>
-        <div className="brand-caption">看见回答，也看见来源。</div>
-        <nav aria-label="主导航">
-          {(
-            [
-              { id: "questions", icon: ListChecks, label: "问题库" },
-              { id: "records", icon: FolderOpen, label: "采集记录" },
-              { id: "compare", icon: GitCompareArrows, label: "历史对照" },
-              { id: "settings", icon: Settings2, label: "运行设置" },
-            ] as const
-          ).map((n) => (
-            <button
-              key={n.id}
-              onClick={() => navigate(n.id)}
-              className={view === n.id ? "nav-item active" : "nav-item"}
-            >
-              <n.icon size={19} />
-              {n.label}
-              {n.id === "questions" && (
-                <span className="nav-count">{questions.length}</span>
-              )}
-            </button>
-          ))}
-        </nav>
-        <div className="sidebar-bottom">
-          <div className="sidebar-heading">
-            监测平台 <span>3</span>
-          </div>
-          {state?.platforms.map((p) => (
-            <button
-              className="platform-health"
-              key={p.id}
-              onClick={() => navigate("settings")}
-            >
-              <span
-                className={`health-dot ${p.waiting ? "warn" : p.validated ? "ready" : ""}`}
-              />
-              <span>{p.name}</span>
-              <small>
-                {p.waiting ? "待处理" : p.validated ? "已验证" : "待验证"}
-              </small>
-            </button>
-          ))}
-          <div className="local-note">
-            <ShieldCheck size={14} /> 数据仅保存在本机
-          </div>
-          <a
-            className="repo-link"
-            href="https://github.com/Xx-otaku/seegeo"
-            target="_blank"
-            rel="noreferrer"
-          >
-            seegeo v0.1 <ExternalLink size={12} />
-          </a>
-        </div>
-      </aside>
-      <main>
-        <div className="topbar">
-          <span>
-            个人工作区{" "}
-            <span className="muted">
-              /{" "}
-              {view === "settings"
-                ? "运行设置"
-                : view === "records"
-                  ? "采集记录"
-                  : view === "compare"
-                    ? "历史对照"
-                    : "问题库"}
+    <OperationContext.Provider value={{ busy, state }}>
+      <div className="app-shell">
+        <aside className="sidebar">
+          <a className="brand" href="/" aria-label="seegeo 首页">
+            <Layers3 size={25} strokeWidth={1.7} />
+            <span>
+              seegeo<span className="brand-period">.</span>
             </span>
-          </span>
-          <span className="service-state">
-            <span className={`health-dot ${state ? "ready" : ""}`} />
-            {state ? "本机服务运行中" : "正在连接服务"}
-          </span>
-        </div>
-        <TaskToolbar state={state} busy={busy} selected={selected.length} act={act} onStart={() => {navigate("questions");setRunOpen(true);}} />
-        {busy && <div className="operation-feedback" role="status"><LoaderCircle size={14} className="spin" />正在执行操作…</div>}
-        {error && (
-          <div className="message error" role="alert">
-            <AlertCircle size={17} />
-            <span>{error}</span>
-            <button onClick={() => setError("")} aria-label="关闭错误提示">
-              <X size={16} />
-            </button>
+          </a>
+          <div className="brand-caption">看见回答，也看见来源。</div>
+          <nav aria-label="主导航">
+            {(
+              [
+                { id: "questions", icon: ListChecks, label: "问题库" },
+                { id: "records", icon: FolderOpen, label: "采集记录" },
+                { id: "compare", icon: GitCompareArrows, label: "历史对照" },
+                { id: "settings", icon: Settings2, label: "运行设置" },
+              ] as const
+            ).map((n) => (
+              <button
+                key={n.id}
+                onClick={() => navigate(n.id)}
+                className={view === n.id ? "nav-item active" : "nav-item"}
+              >
+                <n.icon size={19} />
+                {n.label}
+                {n.id === "questions" && (
+                  <span className="nav-count">{questions.length}</span>
+                )}
+              </button>
+            ))}
+          </nav>
+          <div className="sidebar-bottom">
+            <div className="sidebar-heading">
+              监测平台 <span>3</span>
+            </div>
+            {state?.platforms.map((p) => (
+              <button
+                className="platform-health"
+                key={p.id}
+                onClick={() => navigate("settings")}
+              >
+                <span
+                  className={`health-dot ${p.waiting ? "warn" : p.validated ? "ready" : ""}`}
+                />
+                <span>{p.name}</span>
+                <small>
+                  {p.waiting ? "待处理" : p.validated ? "已验证" : "待验证"}
+                </small>
+              </button>
+            ))}
+            <div className="local-note">
+              <ShieldCheck size={14} /> 数据仅保存在本机
+            </div>
+            <a
+              className="repo-link"
+              href="https://github.com/Xx-otaku/seegeo"
+              target="_blank"
+              rel="noreferrer"
+            >
+              seegeo v0.1 <ExternalLink size={12} />
+            </a>
           </div>
-        )}
-        {notice && (
-          <div className="toast" role="status">
-            <Check size={17} />
-            {notice}
+        </aside>
+        <main>
+          <div className="topbar">
+            <span>
+              个人工作区{" "}
+              <span className="muted">
+                /{" "}
+                {view === "settings"
+                  ? "运行设置"
+                  : view === "records"
+                    ? "采集记录"
+                    : view === "compare"
+                      ? "历史对照"
+                      : "问题库"}
+              </span>
+            </span>
+            <span className="service-state">
+              <span className={`health-dot ${state ? "ready" : ""}`} />
+              {state ? "本机服务运行中" : "正在连接服务"}
+            </span>
           </div>
-        )}
-        <fieldset className="workspace" disabled={busy} aria-busy={busy}>
-          {detail !== null ? (
-            <Reader
-              questionId={detail}
-              question={questions.find((q) => q.id === detail)}
-              initialTask={initialTask}
-              initialPlatform={initialPlatform}
-              initialTab={view === "compare" ? "history" : "read"}
-              onBack={() => setDetail(null)}
-              act={act}
-              exportFile={exportFile}
-            />
-          ) : (
-            <>
-              <header className="page-heading">
-                <div>
-                  <h1>
-                    {view === "questions"
-                      ? "问题监测"
-                      : view === "records"
-                        ? "采集记录"
-                        : view === "compare"
-                          ? "回答怎样变化？"
-                          : "运行设置"}
-                  </h1>
-                  <p>
-                    {view === "questions"
-                      ? "用同一组问题，持续观察三个平台的回答与引用。"
-                      : view === "records"
-                        ? "每次采集都有记录，未完成的结果也如实保留。"
-                        : view === "compare"
-                          ? "选择一个问题，核对不同时点的正文与来源。"
-                          : "设定采集节奏，管理独立浏览器与本机服务。"}
-                  </p>
-                </div>
-                <div className="heading-actions">
-                  {view === "questions" && (
-                    <button
-                      onClick={() => setImportOpen(!importOpen)}
-                      className="button"
-                    >
-                      <Upload size={16} />
-                      导入问题
-                    </button>
-                  )}
-                  {view !== "settings" && (
-                    <div className="export-control">
-                      <ArrowDownToLine size={16} />
-                      <select
-                        aria-label="导出全部结果"
-                        value=""
-                        onChange={(e) => exportFile(e.target.value)}
-                      >
-                        <option value="" disabled>
-                          导出结果
-                        </option>
-                        <option value="answers.csv">回答 CSV</option>
-                        <option value="sources.csv">来源 CSV</option>
-                        <option value="results.json">完整 JSON</option>
-                      </select>
-                    </div>
-                  )}
-                </div>
-              </header>
-              {view === "questions" && (
-                <>
-                  {runOpen && (
-                    <section className="inline-panel run-config">
-                      <div>
-                        <h2>本轮采集范围</h2>
-                        <p>
-                          {selected.length
-                            ? `已选择 ${selected.length} 个问题`
-                            : `全部 ${questions.filter((q) => q.enabled).length} 个已启用问题`}
-                          ，每题每平台一次，各自新对话。
-                        </p>
-                      </div>
-                      <div className="check-row">
-                        {platformIds.map((p) => (
-                          <label key={p}>
-                            <input
-                              type="checkbox"
-                              checked={platforms.includes(p)}
-                              onChange={(e) =>
-                                setPlatforms(
-                                  e.target.checked
-                                    ? [...platforms, p]
-                                    : platforms.filter((x) => x !== p),
-                                )
-                              }
-                            />
-                            {platformNames[p]}
-                          </label>
-                        ))}
-                      </div>
+          <TaskToolbar
+            state={state}
+            busy={busy}
+            selected={selected.length}
+            act={act}
+            onStart={() => {
+              navigate("questions");
+              setRunOpen(true);
+            }}
+          />
+          {busy && (
+            <div className="operation-feedback" role="status">
+              <LoaderCircle size={14} className="spin" />
+              正在执行操作…
+            </div>
+          )}
+          {error && (
+            <div className="message error" role="alert">
+              <AlertCircle size={17} />
+              <span>{error}</span>
+              <button onClick={() => setError("")} aria-label="关闭错误提示">
+                <X size={16} />
+              </button>
+            </div>
+          )}
+          {notice && (
+            <div className="toast" role="status">
+              <Check size={17} />
+              {notice}
+            </div>
+          )}
+          <fieldset className="workspace" disabled={busy} aria-busy={busy}>
+            {detail !== null ? (
+              <Reader
+                questionId={detail}
+                question={questions.find((q) => q.id === detail)}
+                initialTask={initialTask}
+                initialPlatform={initialPlatform}
+                initialTab={view === "compare" ? "history" : "read"}
+                onBack={() => setDetail(null)}
+                act={act}
+                exportFile={exportFile}
+              />
+            ) : (
+              <>
+                <header className="page-heading">
+                  <div>
+                    <h1>
+                      {view === "questions"
+                        ? "问题监测"
+                        : view === "records"
+                          ? "采集记录"
+                          : view === "compare"
+                            ? "回答怎样变化？"
+                            : "运行设置"}
+                    </h1>
+                    <p>
+                      {view === "questions"
+                        ? "用同一组问题，持续观察三个平台的回答与引用。"
+                        : view === "records"
+                          ? "每次采集都有记录，未完成的结果也如实保留。"
+                          : view === "compare"
+                            ? "选择一个问题，核对不同时点的正文与来源。"
+                            : "设定采集节奏，管理独立浏览器与本机服务。"}
+                    </p>
+                  </div>
+                  <div className="heading-actions">
+                    {view === "questions" && (
                       <button
-                        className="button primary"
-                        disabled={busy || !platforms.length || !state?.controls.start.enabled || !questions.some(q=>q.enabled && (!selected.length || selected.includes(q.id)))}
-                        onClick={async () => {
-                          if (
-                            await act(
-                              () =>
-                                api("/batches", {
-                                  platforms,
-                                  ...(selected.length
-                                    ? { questionIds: selected }
-                                    : {}),
-                                }),
-                              "采集任务已创建",
-                            )
-                          )
-                            setRunOpen(false);
-                        }}
+                        onClick={() => setImportOpen(!importOpen)}
+                        className="button"
                       >
-                        确认开始
+                        <Upload size={16} />
+                        导入问题
                       </button>
-                    </section>
-                  )}
-                  {importOpen && (
-                    <ImportPanel
-                      onClose={() => setImportOpen(false)}
-                      act={act}
-                    />
-                  )}
-                  <div className="section-line">
-                    <div className="section-title">
-                      <h2>我的问题</h2>
-                      <span>
-                        {questions.length} 个问题{" "}
-                        <span className="divider">/</span>{" "}
-                        {questions.filter((q) => q.enabled).length} 个已启用
-                      </span>
-                    </div>
-                    <button
-                      className="text-button"
-                      onClick={() => {
-                        setImportOpen(true);
-                        setEdit(null);
-                      }}
-                    >
-                      <Plus size={15} /> 添加问题
-                    </button>
-                  </div>
-                  <div className="filters">
-                    <label className="search-box">
-                      <Search size={17} />
-                      <input
-                        placeholder="搜索问题或分组"
-                        aria-label="搜索问题或分组"
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                      />
-                      {search && (
-                        <button
-                          onClick={() => setSearch("")}
-                          aria-label="清除搜索"
+                    )}
+                    {view !== "settings" && (
+                      <div className="export-control">
+                        <ArrowDownToLine size={16} />
+                        <select
+                          aria-label="导出全部结果"
+                          value=""
+                          onChange={(e) => exportFile(e.target.value)}
                         >
-                          <X size={14} />
-                        </button>
-                      )}
-                    </label>
-                    <select
-                      aria-label="问题分组"
-                      value={group}
-                      onChange={(e) => setGroup(e.target.value)}
-                    >
-                      <option value="">全部分组</option>
-                      {groups.map((g) => (
-                        <option key={g}>{g}</option>
-                      ))}
-                    </select>
-                    <select
-                      aria-label="启用状态"
-                      value={enabled}
-                      onChange={(e) => setEnabled(e.target.value)}
-                    >
-                      <option value="all">全部状态</option>
-                      <option value="enabled">已启用</option>
-                      <option value="disabled">未启用</option>
-                    </select>
-                  </div>
-                  {edit && (
-                    <form
-                      className="inline-panel edit-panel"
-                      onSubmit={async (e) => {
-                        e.preventDefault();
-                        if (
-                          await act(
-                            () =>
-                              api(
-                                `/questions/${edit.id}`,
-                                {
-                                  text: edit.text,
-                                  group_name: edit.group_name,
-                                },
-                                "PATCH",
-                              ),
-                            "问题已保存，历史记录保留原问题版本",
-                          )
-                        )
-                          setEdit(null);
-                      }}
-                    >
-                      <label>
-                        问题原文
-                        <textarea
-                          value={edit.text}
-                          onChange={(e) =>
-                            setEdit({ ...edit, text: e.target.value })
-                          }
-                          required
-                        />
-                      </label>
-                      <label>
-                        分组
-                        <input
-                          value={edit.group_name}
-                          onChange={(e) =>
-                            setEdit({ ...edit, group_name: e.target.value })
-                          }
-                        />
-                      </label>
-                      <div className="row-actions">
-                        <button
-                          type="button"
-                          className="button"
-                          onClick={() => setEdit(null)}
-                        >
-                          取消
-                        </button>
-                        <button className="button primary" disabled={busy}>
-                          保存修改
-                        </button>
-                      </div>
-                    </form>
-                  )}
-                  <div className="table-wrap">
-                    <table className="questions-table">
-                      <thead>
-                        <tr>
-                          <th className="checkbox-cell">
-                            <input
-                              type="checkbox"
-                              aria-label="选择当前筛选的全部问题"
-                              checked={
-                                filtered.length > 0 &&
-                                filtered.every((q) => selected.includes(q.id))
-                              }
-                              onChange={(e) =>
-                                setSelected(
-                                  e.target.checked
-                                    ? [
-                                        ...new Set([
-                                          ...selected,
-                                          ...filtered.map((q) => q.id),
-                                        ]),
-                                      ]
-                                    : selected.filter(
-                                        (id) =>
-                                          !filtered.some((q) => q.id === id),
-                                      ),
-                                )
-                              }
-                            />
-                          </th>
-                          <th>问题 / 分组</th>
-                          {platformIds.map((p) => (
-                            <th key={p}>{platformNames[p]}</th>
-                          ))}
-                          <th>启用</th>
-                          <th>
-                            <span className="sr-only">操作</span>
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filtered.map((q) => (
-                          <tr
-                            key={q.id}
-                            className={
-                              selected.includes(q.id) ? "selected" : ""
-                            }
-                          >
-                            <td>
-                              <input
-                                type="checkbox"
-                                aria-label={`选择问题 ${q.id}`}
-                                checked={selected.includes(q.id)}
-                                onChange={(e) =>
-                                  setSelected(
-                                    e.target.checked
-                                      ? [...selected, q.id]
-                                      : selected.filter((x) => x !== q.id),
-                                  )
-                                }
-                              />
-                            </td>
-                            <td>
-                              <button
-                                className="question-link"
-                                onClick={() => {
-                                  setInitialTask(null);
-                                  setInitialPlatform("doubao");
-                                  setDetail(q.id);
-                                }}
-                              >
-                                {q.text}
-                              </button>
-                              <div className="question-meta">
-                                <span>Q{String(q.id).padStart(3, "0")}</span>
-                                <span>{q.group_name || "未分组"}</span>
-                                {q.version > 1 && <span>版本 {q.version}</span>}
-                              </div>
-                            </td>
-                            {platformIds.map((p) => {
-                              const t = q.latest.find((t) => t.platform === p);
-                              return (
-                                <td key={p}>
-                                  <button
-                                    className="result-cell"
-                                    onClick={() => {
-                                      setInitialTask(null);
-                                      setInitialPlatform(p);
-                                      setDetail(q.id);
-                                    }}
-                                  >
-                                    {t ? (
-                                      <>
-                                        <Badge status={t.status} />
-                                        <small>{fmt(t.finished_at)}</small>
-                                      </>
-                                    ) : (
-                                      <span className="not-collected">
-                                        尚未采集
-                                      </span>
-                                    )}
-                                  </button>
-                                </td>
-                              );
-                            })}
-                            <td>
-                              <label className="switch">
-                                <input
-                                  aria-label={`启用问题 ${q.id}`}
-                                  type="checkbox"
-                                  checked={Boolean(q.enabled)}
-                                  disabled={busy}
-                                  onChange={(e) =>
-                                    act(() =>
-                                      api(
-                                        `/questions/${q.id}`,
-                                        { enabled: e.target.checked },
-                                        "PATCH",
-                                      ),
-                                    )
-                                  }
-                                />
-                                <span />
-                              </label>
-                            </td>
-                            <td>
-                              <div className="table-actions">
-                                <button
-                                  title="编辑问题"
-                                  aria-label={`编辑问题 ${q.id}`}
-                                  onClick={() => setEdit(q)}
-                                >
-                                  <Pencil size={15} />
-                                </button>
-                                <button
-                                  title="移出问题库，保留历史"
-                                  aria-label={`移出问题 ${q.id}`}
-                                  onClick={() => {
-                                    if (
-                                      window.confirm(
-                                        "从问题库移除此问题？已有回答和来源仍会保留。",
-                                      )
-                                    )
-                                      void act(() =>
-                                        api(
-                                          `/questions/${q.id}`,
-                                          undefined,
-                                          "DELETE",
-                                        ),
-                                      );
-                                  }}
-                                >
-                                  <Trash2 size={15} />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    {!filtered.length && (
-                      <div className="empty-state">
-                        <FileText size={32} strokeWidth={1.4} />
-                        <h3>
-                          {questions.length
-                            ? "没有符合条件的问题"
-                            : "先把你的问题放进来"}
-                        </h3>
-                        <p>
-                          {questions.length
-                            ? "试试清除筛选条件。"
-                            : "粘贴多行问题，或导入 CSV。原文会直接发送到三个平台。"}
-                        </p>
-                        <button
-                          className="button"
-                          onClick={() =>
-                            questions.length
-                              ? (setSearch(""), setGroup(""), setEnabled("all"))
-                              : setImportOpen(true)
-                          }
-                        >
-                          {questions.length ? "清除筛选" : "导入第一组问题"}
-                        </button>
+                          <option value="" disabled>
+                            导出结果
+                          </option>
+                          <option value="answers.csv">回答 CSV</option>
+                          <option value="sources.csv">来源 CSV</option>
+                          <option value="results.json">完整 JSON</option>
+                        </select>
                       </div>
                     )}
                   </div>
-                  <div className="table-foot">
-                    <span>
-                      显示 {filtered.length} / {questions.length} 个问题
-                    </span>
-                    <span>每题独立对话 · 保持问题原文 · 单次采样</span>
-                  </div>
-                  <div className="context-note">
-                    <CircleHelp size={16} />
-                    <span>
-                      豆包与元宝按平台规则自动联网；DeepSeek
-                      开启智能搜索。是否实际搜索，会随每条结果保存。
-                    </span>
-                  </div>
-                </>
-              )}
-              {view === "records" && (
-                <Records
-                  state={state}
-                  onRead={(task) => {
-                    setInitialTask(task);
-                    setDetail(task.question_id);
-                  }}
-                  act={act}
-                  exportFile={exportFile}
-                />
-              )}
-              {view === "compare" && (
-                <div className="compare-index">
-                  <label>
-                    选择问题
-                    <select
-                      aria-label="选择对照问题"
-                      value=""
-                      onChange={(e) => setDetail(Number(e.target.value))}
-                    >
-                      <option value="" disabled>
-                        从问题库中选择…
-                      </option>
-                      {questions.map((q) => (
-                        <option key={q.id} value={q.id}>
-                          {q.text}
+                </header>
+                {view === "questions" && (
+                  <>
+                    {runOpen && (
+                      <section className="inline-panel run-config">
+                        <div>
+                          <h2>本轮采集范围</h2>
+                          <p>
+                            {selected.length
+                              ? `已选择 ${selected.length} 个问题`
+                              : `全部 ${questions.filter((q) => q.enabled).length} 个已启用问题`}
+                            ，每题每平台一次，各自新对话。
+                          </p>
+                        </div>
+                        <div className="check-row">
+                          {platformIds.map((p) => (
+                            <label key={p}>
+                              <input
+                                type="checkbox"
+                                checked={platforms.includes(p)}
+                                onChange={(e) =>
+                                  setPlatforms(
+                                    e.target.checked
+                                      ? [...platforms, p]
+                                      : platforms.filter((x) => x !== p),
+                                  )
+                                }
+                              />
+                              {platformNames[p]}
+                            </label>
+                          ))}
+                        </div>
+                        <button
+                          className="button primary"
+                          disabled={
+                            busy ||
+                            !platforms.length ||
+                            !state?.controls.start.enabled ||
+                            !questions.some(
+                              (q) =>
+                                q.enabled &&
+                                (!selected.length || selected.includes(q.id)),
+                            )
+                          }
+                          onClick={async () => {
+                            if (
+                              await act(
+                                () =>
+                                  api("/batches", {
+                                    platforms,
+                                    ...(selected.length
+                                      ? { questionIds: selected }
+                                      : {}),
+                                  }),
+                                "采集任务已创建",
+                              )
+                            )
+                              setRunOpen(false);
+                          }}
+                        >
+                          确认开始
+                        </button>
+                      </section>
+                    )}
+                    {importOpen && (
+                      <ImportPanel
+                        onClose={() => setImportOpen(false)}
+                        act={act}
+                      />
+                    )}
+                    <div className="section-line">
+                      <div className="section-title">
+                        <h2>我的问题</h2>
+                        <span>
+                          {questions.length} 个问题{" "}
+                          <span className="divider">/</span>{" "}
+                          {questions.filter((q) => q.enabled).length} 个已启用
+                        </span>
+                      </div>
+                      <button
+                        className="text-button"
+                        onClick={() => {
+                          setImportOpen(true);
+                          setEdit(null);
+                        }}
+                      >
+                        <Plus size={15} /> 添加问题
+                      </button>
+                    </div>
+                    <div className="filters">
+                      <label className="search-box">
+                        <Search size={17} />
+                        <input
+                          placeholder="搜索问题或分组"
+                          aria-label="搜索问题或分组"
+                          value={search}
+                          onChange={(e) => setSearch(e.target.value)}
+                        />
+                        {search && (
+                          <button
+                            onClick={() => setSearch("")}
+                            aria-label="清除搜索"
+                          >
+                            <X size={14} />
+                          </button>
+                        )}
+                      </label>
+                      <select
+                        aria-label="问题分组"
+                        value={group}
+                        onChange={(e) => setGroup(e.target.value)}
+                      >
+                        <option value="">全部分组</option>
+                        {groups.map((g) => (
+                          <option key={g}>{g}</option>
+                        ))}
+                      </select>
+                      <select
+                        aria-label="启用状态"
+                        value={enabled}
+                        onChange={(e) => setEnabled(e.target.value)}
+                      >
+                        <option value="all">全部状态</option>
+                        <option value="enabled">已启用</option>
+                        <option value="disabled">未启用</option>
+                      </select>
+                    </div>
+                    {edit && (
+                      <form
+                        className="inline-panel edit-panel"
+                        onSubmit={async (e) => {
+                          e.preventDefault();
+                          if (
+                            await act(
+                              () =>
+                                api(
+                                  `/questions/${edit.id}`,
+                                  {
+                                    text: edit.text,
+                                    group_name: edit.group_name,
+                                  },
+                                  "PATCH",
+                                ),
+                              "问题已保存，历史记录保留原问题版本",
+                            )
+                          )
+                            setEdit(null);
+                        }}
+                      >
+                        <label>
+                          问题原文
+                          <textarea
+                            value={edit.text}
+                            onChange={(e) =>
+                              setEdit({ ...edit, text: e.target.value })
+                            }
+                            required
+                          />
+                        </label>
+                        <label>
+                          分组
+                          <input
+                            value={edit.group_name}
+                            onChange={(e) =>
+                              setEdit({ ...edit, group_name: e.target.value })
+                            }
+                          />
+                        </label>
+                        <div className="row-actions">
+                          <button
+                            type="button"
+                            className="button"
+                            onClick={() => setEdit(null)}
+                          >
+                            取消
+                          </button>
+                          <button className="button primary" disabled={busy}>
+                            保存修改
+                          </button>
+                        </div>
+                      </form>
+                    )}
+                    <div className="table-wrap">
+                      <table className="questions-table">
+                        <thead>
+                          <tr>
+                            <th className="checkbox-cell">
+                              <input
+                                type="checkbox"
+                                aria-label="选择当前筛选的全部问题"
+                                checked={
+                                  filtered.length > 0 &&
+                                  filtered.every((q) => selected.includes(q.id))
+                                }
+                                onChange={(e) =>
+                                  setSelected(
+                                    e.target.checked
+                                      ? [
+                                          ...new Set([
+                                            ...selected,
+                                            ...filtered.map((q) => q.id),
+                                          ]),
+                                        ]
+                                      : selected.filter(
+                                          (id) =>
+                                            !filtered.some((q) => q.id === id),
+                                        ),
+                                  )
+                                }
+                              />
+                            </th>
+                            <th>问题 / 分组</th>
+                            {platformIds.map((p) => (
+                              <th key={p}>{platformNames[p]}</th>
+                            ))}
+                            <th>启用</th>
+                            <th>
+                              <span className="sr-only">操作</span>
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filtered.map((q) => (
+                            <tr
+                              key={q.id}
+                              className={
+                                selected.includes(q.id) ? "selected" : ""
+                              }
+                            >
+                              <td>
+                                <input
+                                  type="checkbox"
+                                  aria-label={`选择问题 ${q.id}`}
+                                  checked={selected.includes(q.id)}
+                                  onChange={(e) =>
+                                    setSelected(
+                                      e.target.checked
+                                        ? [...selected, q.id]
+                                        : selected.filter((x) => x !== q.id),
+                                    )
+                                  }
+                                />
+                              </td>
+                              <td>
+                                <button
+                                  className="question-link"
+                                  onClick={() => {
+                                    setInitialTask(null);
+                                    setInitialPlatform("doubao");
+                                    setDetail(q.id);
+                                  }}
+                                >
+                                  {q.text}
+                                </button>
+                                <div className="question-meta">
+                                  <span>Q{String(q.id).padStart(3, "0")}</span>
+                                  <span>{q.group_name || "未分组"}</span>
+                                  {q.version > 1 && (
+                                    <span>版本 {q.version}</span>
+                                  )}
+                                </div>
+                              </td>
+                              {platformIds.map((p) => {
+                                const t = q.latest.find(
+                                  (t) => t.platform === p,
+                                );
+                                return (
+                                  <td key={p}>
+                                    <button
+                                      className="result-cell"
+                                      onClick={() => {
+                                        setInitialTask(null);
+                                        setInitialPlatform(p);
+                                        setDetail(q.id);
+                                      }}
+                                    >
+                                      {t ? (
+                                        <>
+                                          <Badge status={t.status} />
+                                          <small>{fmt(t.finished_at)}</small>
+                                        </>
+                                      ) : (
+                                        <span className="not-collected">
+                                          尚未采集
+                                        </span>
+                                      )}
+                                    </button>
+                                  </td>
+                                );
+                              })}
+                              <td>
+                                <label className="switch">
+                                  <input
+                                    aria-label={`启用问题 ${q.id}`}
+                                    type="checkbox"
+                                    checked={Boolean(q.enabled)}
+                                    disabled={busy}
+                                    onChange={(e) =>
+                                      act(() =>
+                                        api(
+                                          `/questions/${q.id}`,
+                                          { enabled: e.target.checked },
+                                          "PATCH",
+                                        ),
+                                      )
+                                    }
+                                  />
+                                  <span />
+                                </label>
+                              </td>
+                              <td>
+                                <div className="table-actions">
+                                  <button
+                                    title="编辑问题"
+                                    aria-label={`编辑问题 ${q.id}`}
+                                    onClick={() => setEdit(q)}
+                                  >
+                                    <Pencil size={15} />
+                                  </button>
+                                  <button
+                                    title="移出问题库，保留历史"
+                                    aria-label={`移出问题 ${q.id}`}
+                                    onClick={() => {
+                                      if (
+                                        window.confirm(
+                                          "从问题库移除此问题？已有回答和来源仍会保留。",
+                                        )
+                                      )
+                                        void act(() =>
+                                          api(
+                                            `/questions/${q.id}`,
+                                            undefined,
+                                            "DELETE",
+                                          ),
+                                        );
+                                    }}
+                                  >
+                                    <Trash2 size={15} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      {!filtered.length && (
+                        <div className="empty-state">
+                          <FileText size={32} strokeWidth={1.4} />
+                          <h3>
+                            {questions.length
+                              ? "没有符合条件的问题"
+                              : "先把你的问题放进来"}
+                          </h3>
+                          <p>
+                            {questions.length
+                              ? "试试清除筛选条件。"
+                              : "粘贴多行问题，或导入 CSV。原文会直接发送到三个平台。"}
+                          </p>
+                          <button
+                            className="button"
+                            onClick={() =>
+                              questions.length
+                                ? (setSearch(""),
+                                  setGroup(""),
+                                  setEnabled("all"))
+                                : setImportOpen(true)
+                            }
+                          >
+                            {questions.length ? "清除筛选" : "导入第一组问题"}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    <div className="table-foot">
+                      <span>
+                        显示 {filtered.length} / {questions.length} 个问题
+                      </span>
+                      <span>每题独立对话 · 保持问题原文 · 单次采样</span>
+                    </div>
+                    <div className="context-note">
+                      <CircleHelp size={16} />
+                      <span>
+                        豆包与元宝按平台规则自动联网；DeepSeek
+                        开启智能搜索。是否实际搜索，会随每条结果保存。
+                      </span>
+                    </div>
+                  </>
+                )}
+                {view === "records" && (
+                  <Records
+                    state={state}
+                    onRead={(task) => {
+                      setInitialTask(task);
+                      setDetail(task.question_id);
+                    }}
+                    act={act}
+                    exportFile={exportFile}
+                  />
+                )}
+                {view === "compare" && (
+                  <div className="compare-index">
+                    <label>
+                      选择问题
+                      <select
+                        aria-label="选择对照问题"
+                        value=""
+                        onChange={(e) => setDetail(Number(e.target.value))}
+                      >
+                        <option value="" disabled>
+                          从问题库中选择…
                         </option>
-                      ))}
-                    </select>
-                  </label>
-                  <div className="empty-state">
-                    <GitCompareArrows size={36} strokeWidth={1.4} />
-                    <h3>从一条问题开始对照</h3>
-                    <p>
-                      查看三平台的差异，或核对同平台两次采集的正文与来源变化。
-                    </p>
+                        {questions.map((q) => (
+                          <option key={q.id} value={q.id}>
+                            {q.text}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <div className="empty-state">
+                      <GitCompareArrows size={36} strokeWidth={1.4} />
+                      <h3>从一条问题开始对照</h3>
+                      <p>
+                        查看三平台的差异，或核对同平台两次采集的正文与来源变化。
+                      </p>
+                    </div>
                   </div>
-                </div>
-              )}
-              {view === "settings" && state && (
-                <Settings state={state} act={act} />
-              )}
-            </>
-          )}
-        </fieldset>
-        <footer className="page-footer">
-          <span>seegeo · 回答与来源档案</span>
-          <span>Asia/Shanghai · 数据保存在你的 Mac</span>
-        </footer>
-      </main>
-    </div>
+                )}
+                {view === "settings" && state && (
+                  <Settings state={state} act={act} />
+                )}
+              </>
+            )}
+          </fieldset>
+          <footer className="page-footer">
+            <span>seegeo · 回答与来源档案</span>
+            <span>Asia/Shanghai · 数据保存在你的 Mac</span>
+          </footer>
+        </main>
+      </div>
     </OperationContext.Provider>
   );
 }
 
-function TaskToolbar({state,busy,selected,act,onStart}:{state:State|null;busy:boolean;selected:number;act:Act;onStart:()=>void}) {
-  const batch=state?.displayBatch,active=state?.activeBatch;
-  const status=active?.control_state || (batch?.control_state === "cancelled" ? "cancelled" : batch ? "completed" : "idle");
-  const names:Record<string,string>={running:"正在监测",pausing:"正在暂停…",paused:"已暂停",waiting:"需要人工处理",cancelling:"正在取消…",cancelled:"已取消",completed:"本轮已结束",idle:"准备开始监测"};
-  const task=state?.currentItem || state?.pausedTask;
-  const completed=batch ? batch.succeeded+batch.partial+batch.failed+batch.cancelled : 0;
-  const resume=status === "paused" || status === "waiting";
-  const control=state?.controls[resume ? "resume" : "pause"];
-  return <section className={`task-toolbar ${active ? "has-task" : ""}`} aria-label="任务控制">
-    <div className="task-main">
-      <div className={`task-indicator ${status}`} aria-hidden="true">{["running","pausing","cancelling"].includes(status) ? <LoaderCircle size={18} className="spin"/> : status === "paused" ? <Pause size={18}/> : status === "cancelled" ? <X size={18}/> : <Clock3 size={18}/>}</div>
-      <div className="task-copy"><div className="task-title"><strong>{names[status] || status}</strong>{batch && <span>第 {batch.id} 轮 · {completed} / {batch.total} 项</span>}</div>
-      <p title={task?.question_text}>{task && active ? `${platformNames[task.platform]} · ${task.question_text}` : batch ? `${batch.succeeded} 项成功 · ${batch.partial} 项来源待核对 · ${batch.failed} 项失败${batch.cancelled ? ` · ${batch.cancelled} 项取消` : ""}` : state?.schedule.enabled ? `下次计划 ${fmt(state.nextRun)} · 北京时间` : "自动监测已关闭，可手动开始"}</p></div>
-    </div>
-    <div className="task-controls">
-      <button className="button" disabled={busy || !control?.enabled} title={control?.reason || (resume ? "先恢复暂停问题的原会话" : "保留当前进度")} onClick={() => act(() => api(resume ? "/resume" : "/pause",{}))}>{resume ? <Play size={14}/> : <Pause size={14}/>} {resume ? "继续监测" : "暂停监测"}</button>
-      <button className="button cancel-control" disabled={busy || !state?.controls.cancel.enabled} title={state?.controls.cancel.reason || "停止本轮，保留已完成结果"} onClick={() => act(() => api(`/batches/${active?.id}/cancel`,{}),"本轮已取消，已完成结果保留")}><X size={14}/>取消监测</button>
-      {!active && batch && <button className="button" disabled={busy || !state?.controls.rerun.enabled} title={state?.controls.rerun.reason || "按本轮原问题版本和平台范围重跑"} onClick={() => act(() => api(`/batches/${batch.id}/rerun`,{}),"已创建新批次，历史记录保留")}><RotateCcw size={14}/>重新运行本轮</button>}
-      <button className="button primary" disabled={busy || !state?.controls.start.enabled} title={state?.controls.start.reason || "选择本轮问题与平台"} onClick={onStart}><Plus size={15}/>{selected ? `监测 ${selected} 个问题` : "开始一轮"}</button>
-    </div>
-    {batch && <div className="task-progress" role="progressbar" aria-label="批次进度" aria-valuemin={0} aria-valuemax={batch.total} aria-valuenow={completed}><span style={{width:`${batch.total ? completed/batch.total*100 : 0}%`}}/></div>}
-    {active && <p className="task-hint">{status === "paused" ? "继续时优先恢复暂停项；取消本轮后可开始新一轮。" : status === "waiting" ? "在运行设置中完成登录或验证，再继续监测。" : "每题独立对话，串行采集。取消会保留已经完成的回答和来源。"}</p>}
-  </section>;
+function TaskToolbar({
+  state,
+  busy,
+  selected,
+  act,
+  onStart,
+}: {
+  state: State | null;
+  busy: boolean;
+  selected: number;
+  act: Act;
+  onStart: () => void;
+}) {
+  const batch = state?.displayBatch,
+    active = state?.activeBatch;
+  const status =
+    active?.control_state ||
+    (batch?.control_state === "cancelled"
+      ? "cancelled"
+      : batch
+        ? "completed"
+        : "idle");
+  const names: Record<string, string> = {
+    running: "正在监测",
+    pausing: "正在暂停…",
+    paused: "已暂停",
+    waiting: "需要人工处理",
+    cancelling: "正在取消…",
+    cancelled: "已取消",
+    completed: "本轮已结束",
+    idle: "准备开始监测",
+  };
+  const task = state?.currentItem || state?.pausedTask;
+  const completed = batch
+    ? batch.succeeded + batch.partial + batch.failed + batch.cancelled
+    : 0;
+  const resume = status === "paused" || status === "waiting";
+  const control = state?.controls[resume ? "resume" : "pause"];
+  return (
+    <section
+      className={`task-toolbar ${active ? "has-task" : ""}`}
+      aria-label="任务控制"
+    >
+      <div className="task-main">
+        <div className={`task-indicator ${status}`} aria-hidden="true">
+          {["running", "pausing", "cancelling"].includes(status) ? (
+            <LoaderCircle size={18} className="spin" />
+          ) : status === "paused" ? (
+            <Pause size={18} />
+          ) : status === "cancelled" ? (
+            <X size={18} />
+          ) : (
+            <Clock3 size={18} />
+          )}
+        </div>
+        <div className="task-copy">
+          <div className="task-title">
+            <strong>{names[status] || status}</strong>
+            {batch && (
+              <span>
+                第 {batch.id} 轮 · {completed} / {batch.total} 项
+              </span>
+            )}
+          </div>
+          <p title={task?.question_text}>
+            {task && active
+              ? `${platformNames[task.platform]} · ${task.question_text}`
+              : batch
+                ? `${batch.succeeded} 项成功 · ${batch.partial} 项来源待核对 · ${batch.failed} 项失败${batch.cancelled ? ` · ${batch.cancelled} 项取消` : ""}`
+                : state?.schedule.enabled
+                  ? `下次计划 ${fmt(state.nextRun)} · 北京时间`
+                  : "自动监测已关闭，可手动开始"}
+          </p>
+        </div>
+      </div>
+      <div className="task-controls">
+        <button
+          className="button"
+          disabled={busy || !control?.enabled}
+          title={
+            control?.reason ||
+            (resume ? "先恢复暂停问题的原会话" : "保留当前进度")
+          }
+          onClick={() => act(() => api(resume ? "/resume" : "/pause", {}))}
+        >
+          {resume ? <Play size={14} /> : <Pause size={14} />}{" "}
+          {resume ? "继续监测" : "暂停监测"}
+        </button>
+        <button
+          className="button cancel-control"
+          disabled={busy || !state?.controls.cancel.enabled}
+          title={state?.controls.cancel.reason || "停止本轮，保留已完成结果"}
+          onClick={() =>
+            act(
+              () => api(`/batches/${active?.id}/cancel`, {}),
+              "本轮已取消，已完成结果保留",
+            )
+          }
+        >
+          <X size={14} />
+          取消监测
+        </button>
+        {!active && batch && (
+          <button
+            className="button"
+            disabled={busy || !state?.controls.rerun.enabled}
+            title={
+              state?.controls.rerun.reason || "按本轮原问题版本和平台范围重跑"
+            }
+            onClick={() =>
+              act(
+                () => api(`/batches/${batch.id}/rerun`, {}),
+                "已创建新批次，历史记录保留",
+              )
+            }
+          >
+            <RotateCcw size={14} />
+            重新运行本轮
+          </button>
+        )}
+        <button
+          className="button primary"
+          disabled={busy || !state?.controls.start.enabled}
+          title={state?.controls.start.reason || "选择本轮问题与平台"}
+          onClick={onStart}
+        >
+          <Plus size={15} />
+          {selected ? `监测 ${selected} 个问题` : "开始一轮"}
+        </button>
+      </div>
+      {batch && (
+        <div
+          className="task-progress"
+          role="progressbar"
+          aria-label="批次进度"
+          aria-valuemin={0}
+          aria-valuemax={batch.total}
+          aria-valuenow={completed}
+        >
+          <span
+            style={{
+              width: `${batch.total ? (completed / batch.total) * 100 : 0}%`,
+            }}
+          />
+        </div>
+      )}
+      {active && (
+        <p className="task-hint">
+          {status === "paused"
+            ? "继续时优先恢复暂停项；取消本轮后可开始新一轮。"
+            : status === "waiting"
+              ? "在运行设置中完成登录或验证，再继续监测。"
+              : "每题独立对话，串行采集。取消会保留已经完成的回答和来源。"}
+        </p>
+      )}
+    </section>
+  );
 }
 
 type Act = (fn: () => Promise<unknown>, message?: string) => Promise<boolean>;
@@ -1010,9 +1187,19 @@ function Sources({
   );
 }
 function Answer({ task, act }: { task: Task | undefined; act: Act }) {
-  const {busy,state}=useContext(OperationContext);
+  const { busy, state } = useContext(OperationContext);
   if (!task)
     return <div className="empty-answer">这个平台还没有采集记录。</div>;
+  const recoveryReason = busy
+    ? "正在执行操作，请稍候。"
+    : state?.busy
+      ? "请先暂停顶部监测，再恢复原会话。"
+      : !task.conversation_url || !task.mode
+        ? "此项尚未保存原会话或模式，请使用顶部继续监测。"
+        : "";
+  const retryReason = !state?.controls.start.enabled
+    ? "另开对话重采前，请先完成或取消当前批次。"
+    : "";
   return (
     <>
       <div className="answer-meta">
@@ -1037,7 +1224,16 @@ function Answer({ task, act }: { task: Task | undefined; act: Act }) {
       </article>
       <div className="answer-tools">
         {task.conversation_url && (
-          <button className="text-button" disabled={busy} onClick={() => act(() => api(`/tasks/${task.id}/open`, {}),"已在该平台的独立 Chrome 中打开原会话")}>
+          <button
+            className="text-button"
+            disabled={busy}
+            onClick={() =>
+              act(
+                () => api(`/tasks/${task.id}/open`, {}),
+                "已在该平台的独立 Chrome 中打开原会话",
+              )
+            }
+          >
             查看原会话 <ExternalLink size={13} />
           </button>
         )}
@@ -1050,8 +1246,17 @@ function Answer({ task, act }: { task: Task | undefined; act: Act }) {
         ].includes(task.status) && (
           <button
             className="text-button"
-            disabled={busy || state?.busy || !task.conversation_url || !task.mode}
-            title={state?.busy ? "请先暂停监测" : !task.conversation_url || !task.mode ? "此项尚未保存原会话或模式，使用顶部继续监测" : "核对原问题并收取已有回答"}
+            disabled={!!recoveryReason}
+            aria-describedby={
+              recoveryReason ? `recover-reason-${task.id}` : undefined
+            }
+            title={
+              state?.busy
+                ? "请先暂停监测"
+                : !task.conversation_url || !task.mode
+                  ? "此项尚未保存原会话或模式，使用顶部继续监测"
+                  : "核对原问题并收取已有回答"
+            }
             onClick={() =>
               act(
                 () => api(`/tasks/${task.id}/recover`, {}),
@@ -1069,8 +1274,20 @@ function Answer({ task, act }: { task: Task | undefined; act: Act }) {
           <button
             className="text-button"
             disabled={busy || !state?.controls.start.enabled}
-            title={!state?.controls.start.enabled ? "请先完成或取消当前批次" : "在新批次采集，原结果保留"}
-            onClick={() => act(() => api(`/tasks/${task.id}/retry`, {}),"重采批次已开始，原结果保留")}
+            aria-describedby={
+              retryReason ? `retry-reason-${task.id}` : undefined
+            }
+            title={
+              !state?.controls.start.enabled
+                ? "请先完成或取消当前批次"
+                : "在新批次采集，原结果保留"
+            }
+            onClick={() =>
+              act(
+                () => api(`/tasks/${task.id}/retry`, {}),
+                "重采批次已开始，原结果保留",
+              )
+            }
           >
             <Play size={13} />
             另开对话重采
@@ -1088,6 +1305,26 @@ function Answer({ task, act }: { task: Task | undefined; act: Act }) {
           </a>
         )}
       </div>
+      {recoveryReason &&
+        [
+          "paused",
+          "uncertain",
+          "partial",
+          "waiting_login",
+          "waiting_verification",
+        ].includes(task.status) && (
+          <p className="action-reason" id={`recover-reason-${task.id}`}>
+            {recoveryReason}
+          </p>
+        )}
+      {retryReason &&
+        ["uncertain", "partial", "failed", "cancelled"].includes(
+          task.status,
+        ) && (
+          <p className="action-reason" id={`retry-reason-${task.id}`}>
+            {retryReason}
+          </p>
+        )}
       <Sources sources={task.sources} status={task.source_status} />
     </>
   );
@@ -1437,7 +1674,27 @@ function Records({
           </p>
         </div>
       )}
-      {batch && state && <div className="history-actions"><button className="button" disabled={!state.controls.rerun.enabled} title={state.controls.rerun.reason || "使用原问题版本和平台范围创建新批次"} onClick={() => act(() => api(`/batches/${batch}/rerun`,{}),"已按原批次范围重新开始")}><RotateCcw size={15}/>重新运行所选批次</button></div>}
+      {batch && state && (
+        <div className="history-actions">
+          <button
+            className="button"
+            disabled={!state.controls.rerun.enabled}
+            title={
+              state.controls.rerun.reason ||
+              "使用原问题版本和平台范围创建新批次"
+            }
+            onClick={() =>
+              act(
+                () => api(`/batches/${batch}/rerun`, {}),
+                "已按原批次范围重新开始",
+              )
+            }
+          >
+            <RotateCcw size={15} />
+            重新运行所选批次
+          </button>
+        </div>
+      )}
       <div className="filters record-filters">
         <select
           aria-label="采集批次"
@@ -1557,8 +1814,8 @@ function Records({
   );
 }
 function Settings({ state, act }: { state: State; act: Act }) {
-  const {busy}=useContext(OperationContext);
-  const [exited,setExited]=useState(false);
+  const { busy } = useContext(OperationContext);
+  const [exited, setExited] = useState(false);
   const [schedule, setSchedule] = useState(state.schedule),
     [auto, setAuto] = useState(state.allowAutoSearch),
     [notifications, setNotifications] = useState(state.notifications);
@@ -1704,7 +1961,11 @@ function Settings({ state, act }: { state: State; act: Act }) {
                 <button
                   className="button"
                   disabled={busy || state.busy}
-                  title={state.busy ? "请先暂停监测，再打开登录窗口" : "使用独立 Chrome 登录态"}
+                  title={
+                    state.busy
+                      ? "请先暂停监测，再打开登录窗口"
+                      : "使用独立 Chrome 登录态"
+                  }
                   onClick={() =>
                     act(
                       () => api(`/platforms/${p.id}/login`, {}),
@@ -1721,7 +1982,9 @@ function Settings({ state, act }: { state: State; act: Act }) {
                     onClick={() =>
                       act(
                         () => api(`/platforms/${p.id}/resume`, {}),
-                        state.paused ? "已解除平台等待；点击顶部继续监测恢复本轮" : "平台已恢复，优先检查原会话",
+                        state.paused
+                          ? "已解除平台等待；点击顶部继续监测恢复本轮"
+                          : "平台已恢复，优先检查原会话",
                       )
                     }
                   >
@@ -1768,7 +2031,12 @@ function Settings({ state, act }: { state: State; act: Act }) {
                   "退出本机服务？未完成任务会保持暂停，下次启动后可继续。",
                 )
               )
-                void act(() => api("/shutdown", {}),"服务已退出，下次请重新启动").then(ok=>{if(ok)setExited(true);});
+                void act(
+                  () => api("/shutdown", {}),
+                  "服务已退出，下次请重新启动",
+                ).then((ok) => {
+                  if (ok) setExited(true);
+                });
             }}
           >
             <Power size={15} />

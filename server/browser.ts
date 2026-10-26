@@ -47,7 +47,7 @@ export class BrowserPool {
   async open(platform: Platform, url: string) {
     const home = await this.page(platform);
     const tab = await home.context().newPage();
-    await tab.goto(url, {waitUntil:"domcontentloaded", timeout:30000});
+    await tab.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
     await tab.bringToFront();
   }
   async close() {

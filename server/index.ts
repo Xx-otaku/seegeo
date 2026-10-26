@@ -172,15 +172,41 @@ app.post("/api/batches", async (req) => {
       questionIds: z.array(z.number().int().positive()).min(1).optional(),
     })
     .parse(req.body || {});
-  const batchId = await runner.create([...new Set(body.platforms)],body.questionIds);
+  const batchId = await runner.create(
+    [...new Set(body.platforms)],
+    body.questionIds,
+  );
   return { batchId };
 });
-app.post("/api/pause", async () => { await runner.pause(); return {ok:true}; });
-app.post("/api/resume", async () => { await runner.resume(); return {ok:true}; });
-app.post<{ Params: { id: string } }>("/api/batches/:id/cancel", async req => {await runner.cancel(id(req.params.id)); return {ok:true};});
-app.post<{ Params: { id: string } }>("/api/batches/:id/rerun", async req => ({batchId: await runner.rerun(id(req.params.id))}));
-app.post<{ Params: { platform: string } }>("/api/platforms/:platform/login", async req => {await runner.login(platformSchema.parse(req.params.platform)); return {ok:true};});
-app.post<{ Params: { platform: string } }>("/api/platforms/:platform/resume", async req => {await runner.releasePlatform(platformSchema.parse(req.params.platform)); return {ok:true};});
+app.post("/api/pause", async () => {
+  await runner.pause();
+  return { ok: true };
+});
+app.post("/api/resume", async () => {
+  await runner.resume();
+  return { ok: true };
+});
+app.post<{ Params: { id: string } }>("/api/batches/:id/cancel", async (req) => {
+  await runner.cancel(id(req.params.id));
+  return { ok: true };
+});
+app.post<{ Params: { id: string } }>("/api/batches/:id/rerun", async (req) => ({
+  batchId: await runner.rerun(id(req.params.id)),
+}));
+app.post<{ Params: { platform: string } }>(
+  "/api/platforms/:platform/login",
+  async (req) => {
+    await runner.login(platformSchema.parse(req.params.platform));
+    return { ok: true };
+  },
+);
+app.post<{ Params: { platform: string } }>(
+  "/api/platforms/:platform/resume",
+  async (req) => {
+    await runner.releasePlatform(platformSchema.parse(req.params.platform));
+    return { ok: true };
+  },
+);
 app.post<{ Params: { platform: string } }>(
   "/api/platforms/:platform/validate",
   (req) => {
@@ -192,10 +218,20 @@ app.post<{ Params: { platform: string } }>(
     return { ok: true };
   },
 );
-app.post<{ Params: { id: string } }>("/api/tasks/:id/retry", async req => ({batchId:await runner.retry(id(req.params.id))}));
-app.post<{ Params: { id: string } }>("/api/tasks/:id/recover", async req => {await runner.recoverTask(id(req.params.id));return {ok:true};});
-app.post<{ Params: { id: string } }>("/api/tasks/:id/open", async req => {await runner.openConversation(id(req.params.id));return {ok:true};});
-app.get<{ Params: { id: string } }>("/api/tasks/:id/attempts", req => store.attempts(id(req.params.id)));
+app.post<{ Params: { id: string } }>("/api/tasks/:id/retry", async (req) => ({
+  batchId: await runner.retry(id(req.params.id)),
+}));
+app.post<{ Params: { id: string } }>("/api/tasks/:id/recover", async (req) => {
+  await runner.recoverTask(id(req.params.id));
+  return { ok: true };
+});
+app.post<{ Params: { id: string } }>("/api/tasks/:id/open", async (req) => {
+  await runner.openConversation(id(req.params.id));
+  return { ok: true };
+});
+app.get<{ Params: { id: string } }>("/api/tasks/:id/attempts", (req) =>
+  store.attempts(id(req.params.id)),
+);
 app.patch("/api/settings", (req) => {
   const body = z
     .object({
@@ -243,7 +279,10 @@ app.get<{ Params: { format: string } }>(
             schemaVersion: 2,
             exportedAt: new Date().toISOString(),
             batches: store.batches(),
-            results: tasks.map(({ answer_html, ...t }) => ({...t, attemptsLog: store.attempts(t.id)})),
+            results: tasks.map(({ answer_html, ...t }) => ({
+              ...t,
+              attemptsLog: store.attempts(t.id),
+            })),
           },
           null,
           2,

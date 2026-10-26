@@ -709,19 +709,30 @@ export async function recoverExisting(
     .waitFor({ state: "visible", timeout: 30000 });
   await page.waitForTimeout(1500);
   await checkAccess(page);
-  let humans = await page.locator(selectors[p].human).allInnerTexts();
-  if (!humans.some((t) => t.trim() === question.trim()) && p === "doubao") {
-    await page.locator('[data-testid="message-list"]').evaluate((el) => {
-      let p: HTMLElement | null = el as HTMLElement;
-      while (p) {
-        if (p.scrollHeight > p.clientHeight + 10) p.scrollTop = 0;
-        p = p.parentElement;
-      }
-    });
+  // Inputs can become visible before the SPA restores its conversation messages.
+  const questionDeadline = Date.now() + Math.min(timeoutMs, 15000);
+  let confirmed = false;
+  while (Date.now() < questionDeadline) {
+    if (signal?.aborted)
+      throw new CollectorError("原会话恢复已中断", "cancelled", true);
+    await checkAccess(page);
+    let humans = await page.locator(selectors[p].human).allInnerTexts();
+    confirmed = humans.some((t) => t.trim() === question.trim());
+    if (confirmed) break;
+    if (p === "doubao") {
+      const list = page.locator('[data-testid="message-list"]');
+      if (await list.count())
+        await list.evaluate((el) => {
+          let node: HTMLElement | null = el as HTMLElement;
+          while (node) {
+            if (node.scrollHeight > node.clientHeight + 10) node.scrollTop = 0;
+            node = node.parentElement;
+          }
+        });
+    }
     await page.waitForTimeout(1000);
-    humans = await page.locator(selectors[p].human).allInnerTexts();
   }
-  if (!humans.some((t) => t.trim() === question.trim()))
+  if (!confirmed)
     throw new CollectorError(
       "原会话中无法核对问题原文，不能自动恢复",
       "uncertain",
@@ -729,22 +740,33 @@ export async function recoverExisting(
     );
   const answer = page.locator(selectors[p].answer).last();
   const deadline = Date.now() + timeoutMs;
-  let text = "", previous = "", stable = 0;
+  let text = "",
+    previous = "",
+    stable = 0;
   while (Date.now() < deadline) {
-    if (signal?.aborted) throw new CollectorError("原会话恢复已中断", "cancelled", true);
+    if (signal?.aborted)
+      throw new CollectorError("原会话恢复已中断", "cancelled", true);
     await checkAccess(page);
     if (await answer.count()) {
       text = await answer.innerText();
-      const complete = await isComplete(page,p);
-      if (complete && text && text === previous && !(await visible(page.locator(selectors[p].stop)))) stable++;
-      else stable=0;
-      previous=text;
+      const complete = await isComplete(page, p);
+      if (
+        complete &&
+        text &&
+        text === previous &&
+        !(await visible(page.locator(selectors[p].stop)))
+      )
+        stable++;
+      else stable = 0;
+      previous = text;
       if (stable >= 2) break;
     }
     await page.waitForTimeout(1500);
   }
-  if (stable < 2) throw new CollectorError("原会话未在等待时间内完成", "timeout", true);
-  if (signal?.aborted) throw new CollectorError("原会话恢复已中断", "cancelled", true);
+  if (stable < 2)
+    throw new CollectorError("原会话未在等待时间内完成", "timeout", true);
+  if (signal?.aborted)
+    throw new CollectorError("原会话恢复已中断", "cancelled", true);
   const extracted = await extractSources(page, p, answer).catch(() => ({
     sources: [] as Source[],
     status: "failed" as const,
