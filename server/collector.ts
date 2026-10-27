@@ -221,6 +221,7 @@ export async function extractSources(
   sources: Source[];
   status: Capture["sourceStatus"];
   searched: boolean | null;
+  evidence?: { reported: number; visible: number; citations: "none" | "present" | "unresolved" };
 }> {
   const sources: Source[] = [];
   if (p === "yuanbao") {
@@ -307,16 +308,15 @@ export async function extractSources(
   if (p === "doubao") {
     const ai = page.locator('[data-testid="receive_message"]').last();
     const trigger = ai.getByText(/^搜索 .*参考 \d+ 篇资料$/);
-    if (!(await visible(trigger)))
+    if (!(await visible(trigger))) {
+      const chips = await answer.locator('span[class*="container-sWvQla"]').count();
       return {
         sources: [],
-        status: (await answer
-          .locator('span[class*="container-sWvQla"]')
-          .count())
-          ? "failed"
-          : "none",
+        status: chips ? "failed" : "none",
         searched: null,
+        evidence: { reported: 0, visible: 0, citations: chips ? "unresolved" : "none" },
       };
+    }
     const expected = Number(
       (await trigger.innerText()).match(/参考 (\d+) 篇/)?.[1] || 0,
     );
@@ -333,7 +333,7 @@ export async function extractSources(
           url: (el as HTMLAnchorElement).href,
           title: ((el as HTMLElement).innerText || "").replace(/^\d+\.\s*/, ""),
           snippet: "",
-          marker: String(i + 1),
+          marker: (el as HTMLElement).innerText.match(/^(\d+)\./)?.[1] || "",
         })),
       );
     for (const c of cards)
@@ -401,8 +401,11 @@ export async function extractSources(
     }
     return {
       sources,
-      status: cards.length === expected && !unresolved ? "extracted" : "failed",
+      // The headline reports consulted material, while the expanded list can expose
+      // fewer links. Preserve both counts; validate the entire visible numbered list.
+      status: cards.length > 0 && cards.length <= expected && cards.every((c, i) => c.marker === String(i + 1) && !!c.url && !!c.title) && !unresolved ? "extracted" : "failed",
       searched: true,
+      evidence: { reported: expected, visible: cards.length, citations: unresolved ? "unresolved" : (await chips.count()) ? "present" : "none" },
     };
   }
   const addLinks = async (scope: Locator, kind: Source["kind"]) => {
@@ -677,6 +680,7 @@ export async function collect(
       searched: null,
     }));
     mode.mode.searchTriggered = extracted.searched;
+    if ("evidence" in extracted && extracted.evidence) mode.mode.sourceEvidence = extracted.evidence;
     return {
       answer: previous,
       html,
@@ -786,7 +790,7 @@ export async function recoverExisting(
     html: await answer.innerHTML(),
     sources: extracted.sources,
     sourceStatus: extracted.status,
-    mode: { ...mode, searchTriggered: extracted.searched },
+    mode: { ...mode, searchTriggered: extracted.searched, ...("evidence" in extracted && extracted.evidence ? { sourceEvidence: extracted.evidence } : {}) },
     model,
     conversationUrl: page.url(),
     startedAt,

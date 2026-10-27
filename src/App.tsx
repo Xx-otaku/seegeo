@@ -1217,13 +1217,21 @@ function ImportPanel({ onClose, act }: { onClose: () => void; act: Act }) {
 function Sources({
   sources,
   status,
+  evidence,
 }: {
   sources: Source[];
   status: string | null;
+  evidence?: { reported: number; visible: number; citations: "none" | "present" | "unresolved" };
 }) {
   return (
     <div className="sources">
       <h3>引用与来源</h3>
+      {evidence?.citations === "none" && (
+        <p className="muted">正文未引用任何文章。</p>
+      )}
+      {evidence && evidence.reported !== evidence.visible && (
+        <p className="muted">平台显示参考了 {evidence.reported} 篇资料，展开列表展示 {evidence.visible} 条；仅保存平台展示的链接。</p>
+      )}
       {status === "failed" && (
         <p className="warning-text">
           来源提取未完成，以下内容可能不完整，请核对原会话。
@@ -1411,7 +1419,7 @@ function Answer({ task, act }: { task: Task | undefined; act: Act }) {
             {retryReason}
           </p>
         )}
-      <Sources sources={task.sources} status={task.source_status} />
+      <Sources sources={task.sources} status={task.source_status} evidence={task.mode?.sourceEvidence} />
     </>
   );
 }

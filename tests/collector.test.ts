@@ -84,3 +84,17 @@ test("question ownership ignores only rendering whitespace, never missing or cha
     normalizeQuestion("睢宁500平水包砂"),
   );
 });
+
+test("Doubao stores the complete visible list and distinguishes reported total from visible references", async () => {
+  await page.setContent(`<div data-testid="receive_message"><div>搜索 2 个关键词，参考 3 篇资料</div><div data-testid="message_text_content">回答正文没有引用。</div><a data-thinking-box-tool-call href="https://one.example/a">1.第一篇</a><a data-thinking-box-tool-call href="https://two.example/b">2.第二篇</a></div>`);
+  const result = await extractSources(page, "doubao", page.locator('[data-testid="message_text_content"]'));
+  assert.equal(result.status, "extracted");
+  assert.deepEqual(result.evidence, { reported: 3, visible: 2, citations: "none" });
+  assert.equal(result.sources.length, 2);
+});
+
+test("Doubao rejects a broken or noncontiguous visible list", async () => {
+  await page.setContent(`<div data-testid="receive_message"><div>搜索 2 个关键词，参考 3 篇资料</div><div data-testid="message_text_content">正文</div><a data-thinking-box-tool-call href="https://one.example/a">1.第一篇</a><a data-thinking-box-tool-call href="https://two.example/b">3.第三篇</a></div>`);
+  const result = await extractSources(page, "doubao", page.locator('[data-testid="message_text_content"]'));
+  assert.equal(result.status, "failed");
+});

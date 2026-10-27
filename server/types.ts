@@ -38,6 +38,7 @@ export interface Capture {
     search: "enabled" | "auto";
     thinking: false;
     searchTriggered: boolean | null;
+    sourceEvidence?: { reported: number; visible: number; citations: "none" | "present" | "unresolved" };
   };
   conversationUrl: string;
   startedAt: string;
