@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="300" viewBox="0 0 1200 300" role="img" aria-labelledby="title desc">
-<title id="title">seegeo</title><desc id="desc">看见回答，也看见来源。</desc>
-<rect width="1200" height="300" rx="28" fill="#f2f6fd"/><circle cx="1050" cy="-40" r="230" fill="#e5efff"/><circle cx="1160" cy="265" r="150" fill="#dceaff"/>
-<g transform="translate(78 83)" fill="none" stroke="#0875df" stroke-width="5" stroke-linejoin="round"><path d="M0 20 35 1 70 20 35 39z"/><path d="m0 35 35 19 35-19M0 50l35 19 35-19"/></g>
-<text x="178" y="132" fill="#182333" font-family="-apple-system,BlinkMacSystemFont,Arial,sans-serif" font-size="66" font-weight="700">seegeo</text>
-<text x="180" y="187" fill="#536477" font-family="-apple-system,BlinkMacSystemFont,Arial,sans-serif" font-size="27">看见回答，也看见来源。</text>
-<text x="180" y="226" fill="#768699" font-family="-apple-system,BlinkMacSystemFont,Arial,sans-serif" font-size="18">A local workspace for AI answer monitoring</text>
-</svg>

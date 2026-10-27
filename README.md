@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/images/banner.svg" alt="seegeo：看见回答，也看见来源" width="100%">
+<img src="docs/images/banner.jpg" alt="seegeo：看见回答，也看见来源" width="100%">
 
 **在自己的 Mac 上，持续记录 AI 怎么回答、参考了哪些来源。**
 
