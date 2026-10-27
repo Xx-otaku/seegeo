@@ -35,6 +35,7 @@ function setup(
   collectFn: typeof collect,
   recoverFn?: typeof recoverExisting,
   count = 2,
+  options: NonNullable<ConstructorParameters<typeof Runner>[2]> = {},
 ) {
   const store = new Store(":memory:");
   store.setSetting("notifications", false);
@@ -58,6 +59,7 @@ function setup(
     delayMs: 0,
     diagnostics: false,
     pauseGraceMs: 0,
+    ...options,
   });
   return { store, runner, batch };
 }
@@ -349,6 +351,128 @@ test("合作的采集器暂停时保留浏览器页，恢复优先原会话", as
   await runner.resume();
   await until(() => !runner.busy);
   assert.equal(recovered, 1);
+  await runner.stop();
+  store.close();
+});
+for (const phase of ["opening", "submitted", "extracting"])
+  test(`硬时限覆盖 ${phase} 中不响应的采集，跳过后继续并隔离迟到结果`, async () => {
+    let calls = 0;
+    const late = defer<Capture>();
+    let latePhase: Parameters<typeof collect>[3] = () => {};
+    const { store, runner, batch } = setup(
+      async (_p, _platform, q, onPhase) => {
+        calls++;
+        onPhase(phase, { mode: capture().mode, model: null });
+        if (calls === 1) {
+          latePhase = onPhase;
+          return late.promise;
+        }
+        return capture(q);
+      },
+      undefined,
+      2,
+      { budgetMs: 35 },
+    );
+    await runner.work();
+    const rows = store.tasks({ batchId: batch });
+    const skipped = rows.find((t) => t.status === "skipped")!;
+    assert.ok(skipped?.finished_at);
+    assert.equal(rows.filter((t) => t.status === "succeeded").length, 1);
+    assert.equal(store.hasUnfinished(), false);
+    assert.equal(store.batch(batch)?.control_state, "completed");
+    late.resolve(capture("迟到"));
+    latePhase("completed");
+    await new Promise((r) => setTimeout(r, 5));
+    assert.equal(store.task(skipped.id)?.status, "skipped");
+    assert.equal(store.task(skipped.id)?.answer, null);
+    await runner.stop();
+    store.close();
+  });
+test("提交后核对失败自动恢复原会话，不屏蔽平台或重复提问", async () => {
+  let calls = 0,
+    recoveries = 0;
+  const { store, runner } = setup(
+    async (_p, _platform, q, phase) => {
+      calls++;
+      phase("submitted", { mode: capture().mode, model: null });
+      if (calls === 1)
+        throw new CollectorError("暂时无法核对", "uncertain", true);
+      return capture(q);
+    },
+    async () => {
+      recoveries++;
+      return capture("原会话");
+    },
+  );
+  await runner.work();
+  assert.equal(calls, 2);
+  assert.equal(recoveries, 1);
+  assert.ok(store.tasks().every((t) => t.status === "succeeded"));
+  assert.ok(store.events().some((e) => e.type === "auto_recovery"));
+  await runner.stop();
+  store.close();
+});
+test("恢复与一次新对话都失败时跳过当前项，下一项仍运行", async () => {
+  let calls = 0;
+  const { store, runner } = setup(
+    async (_p, _platform, q, phase) => {
+      calls++;
+      phase("submitted", { mode: capture().mode, model: null });
+      if (calls <= 2) throw new CollectorError("生成失败", "uncertain", true);
+      return capture(q);
+    },
+    async () => {
+      throw new CollectorError("会话不可恢复", "uncertain", true);
+    },
+  );
+  await runner.work();
+  assert.equal(calls, 3);
+  assert.equal(store.tasks({ status: "skipped" }).length, 1);
+  assert.equal(store.tasks({ status: "succeeded" }).length, 1);
+  assert.equal(store.hasUnfinished(), false);
+  await runner.stop();
+  store.close();
+});
+test("登录等待到期后释放平台且继续下一项，不会永远停在等待状态", async () => {
+  let calls = 0;
+  const { store, runner } = setup(async () => {
+    if (++calls === 1) throw new CollectorError("需要登录", "login");
+    return capture();
+  });
+  await runner.work();
+  const waiting = store.tasks({ status: "waiting_login" })[0];
+  assert.ok(waiting);
+  store.patchTask(waiting.id, {
+    retry_deadline_at: new Date(Date.now() - 1).toISOString(),
+  });
+  await runner.tick();
+  assert.equal(store.task(waiting.id)?.status, "skipped");
+  assert.equal(store.tasks({ status: "succeeded" }).length, 1);
+  assert.equal(store.hasUnfinished(), false);
+  await runner.stop();
+  store.close();
+});
+test("手动暂停不消耗自动恢复时限，继续后重新计时", async () => {
+  const entered = defer();
+  const { store, runner } = setup(
+    async (_p, _platform, _q, phase) => {
+      phase("submitted", { mode: capture().mode, model: null });
+      entered.resolve();
+      return new Promise(() => {});
+    },
+    async () => capture(),
+    1,
+    { budgetMs: 70 },
+  );
+  void runner.work();
+  await entered.promise;
+  const id = runner.current!;
+  await runner.pause();
+  assert.equal(store.task(id)?.retry_deadline_at, null);
+  await new Promise((r) => setTimeout(r, 90));
+  await runner.resume();
+  await until(() => !runner.busy);
+  assert.equal(store.task(id)?.status, "succeeded");
   await runner.stop();
   store.close();
 });

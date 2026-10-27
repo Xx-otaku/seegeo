@@ -13,10 +13,11 @@ import {
   type Platform,
 } from "./types.js";
 import { latestSlot } from "./schedule.js";
+import { defaultRetryPolicy, type RetryPolicy } from "./retry-policy.js";
 import { dataDir } from "./config.js";
 
 const terminal = (t: Task) =>
-  ["succeeded", "partial", "failed", "cancelled"].includes(t.status);
+  ["succeeded", "partial", "failed", "skipped", "cancelled"].includes(t.status);
 const submitted = (t: Task) =>
   ["submitting", "submitted", "extracting"].includes(t.phase);
 type Dependencies = {
@@ -25,6 +26,9 @@ type Dependencies = {
   delayMs?: number;
   diagnostics?: boolean;
   pauseGraceMs?: number;
+  budgetMs?: number;
+  attemptMs?: number;
+  recoveryMs?: number;
 };
 
 /** A single worker owns all browser writes. Control commands serialize; abort fences late results. */
@@ -74,6 +78,7 @@ export class Runner {
       );
   }
   async tick(now = new Date()) {
+    if (!this.store.getSetting("paused")) this.expireWaiting();
     if (this.stopping || this.busy || this.store.getSetting("paused")) return;
     const schedule = this.store.schedule;
     if (
@@ -95,6 +100,51 @@ export class Runner {
         });
     }
     await this.work();
+  }
+  get retryPolicy() {
+    return (
+      this.store.getSetting<RetryPolicy>("retryPolicy") || defaultRetryPolicy
+    );
+  }
+  private expireWaiting() {
+    for (const t of this.store.tasks())
+      if (
+        ["waiting_login", "waiting_verification", "uncertain"].includes(
+          t.status,
+        ) &&
+        t.retry_deadline_at &&
+        Date.parse(t.retry_deadline_at) <= Date.now()
+      ) {
+        this.store.patchTask(t.id, {
+          status: "skipped",
+          finished_at: new Date().toISOString(),
+          error: `等待恢复超过时限，已跳过；${t.error || ""}`,
+          interruption_reason: "retry_timeout",
+        });
+        this.store.event(
+          "skipped",
+          `任务 ${t.id} 超时跳过，不再屏蔽 ${platformNames[t.platform]}`,
+        );
+        this.finishBatch(t.batch_id);
+        const b = this.store.batch(t.batch_id);
+        if (b && !b.finished_at && b.control_state === "waiting")
+          this.store.setBatchState(t.batch_id, "running");
+      }
+  }
+  private async closeBounded(page: Page | undefined) {
+    if (!page) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        this.browsers.interrupt(page),
+        new Promise<void>((r) => {
+          timer = setTimeout(r, 5000);
+        }),
+      ]);
+    } catch {
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
   private blocked() {
     const b = this.store.activeBatch();
@@ -152,7 +202,7 @@ export class Runner {
     }
     // A cooperative pause keeps the live conversation (and its generation stream).
     // Cancel or an unresponsive collector closes only its tab, fencing all browser writes.
-    if (page && !settled) await this.browsers.interrupt(page).catch(() => {});
+    if (page && !settled) await this.closeBounded(page);
     await this.worker;
   }
   private async guarded<T>(
@@ -177,7 +227,7 @@ export class Runner {
   }
   private async run() {
     if (process.platform === "darwin") {
-      this.awake = spawn("/usr/bin/caffeinate", ["-i"]);
+      this.awake = spawn("/usr/bin/caffeinate", ["-d", "-i", "-s"]);
       this.awake.on("error", () => {});
     }
     while (!this.stopping && !this.store.getSetting("paused")) {
@@ -192,6 +242,26 @@ export class Runner {
       const controller = new AbortController();
       this.controller = controller;
       const signal = controller.signal;
+      const deadline = task.retry_deadline_at
+        ? Date.parse(task.retry_deadline_at)
+        : Date.now() +
+          (this.deps.budgetMs ?? this.retryPolicy.totalSeconds * 1000);
+      this.store.patchTask(task.id, {
+        retry_deadline_at: new Date(deadline).toISOString(),
+      });
+      const expire = () => {
+        if (Date.now() >= deadline && !signal.aborted)
+          controller.abort("task_timeout");
+      };
+      const watchdog = setInterval(
+        expire,
+        Math.min(1000, this.deps.budgetMs ?? 1000),
+      );
+      const deadlineTimer = setTimeout(
+        expire,
+        Math.max(0, deadline - Date.now()),
+      );
+
       let attempt = this.store.beginAttempt(
         task.id,
         submitted(task) ? "recover" : "collect",
@@ -241,6 +311,13 @@ export class Runner {
                 task.model,
                 task.started_at || undefined,
                 signal,
+                Math.max(
+                  1,
+                  Math.min(
+                    this.deps.recoveryMs ?? 60000,
+                    deadline - Date.now(),
+                  ),
+                ),
               ),
               signal,
             );
@@ -280,7 +357,14 @@ export class Runner {
               {
                 allowAutoSearch:
                   this.store.getSetting("allowAutoSearch") === true,
-                timeoutMs: 300000,
+                timeoutMs: Math.max(
+                  1,
+                  Math.min(
+                    this.deps.attemptMs ??
+                      this.retryPolicy.attemptSeconds * 1000,
+                    deadline - Date.now(),
+                  ),
+                ),
               },
             ),
             signal,
@@ -301,56 +385,102 @@ export class Runner {
             : new CollectorError(String(error), "uncertain", true);
         const fresh = this.store.task(task.id)!;
         if (signal.aborted) {
-          this.store.patchTask(task.id, {
-            status: signal.reason === "user_cancel" ? "cancelled" : "paused",
-            interruption_reason: String(signal.reason || "unexpected_exit"),
-            interrupted_at: new Date().toISOString(),
-            error:
-              signal.reason === "user_cancel"
-                ? "用户取消本轮；已完成结果保留"
-                : "已暂停，继续时优先恢复此项",
-          });
+          if (signal.reason === "task_timeout") {
+            await this.closeBounded(this.page);
+            this.store.patchTask(task.id, {
+              status: "skipped",
+              finished_at: new Date().toISOString(),
+              interruption_reason: "retry_timeout",
+              error: `每项总时限 ${this.retryPolicy.totalSeconds} 秒已到，已跳过；原会话可能仍有回答`,
+            });
+            this.store.event(
+              "skipped",
+              `任务 ${task.id} 到达总时限，继续下一项`,
+            );
+          } else
+            this.store.patchTask(task.id, {
+              status: signal.reason === "user_cancel" ? "cancelled" : "paused",
+              interruption_reason: String(signal.reason || "unexpected_exit"),
+              interrupted_at: new Date().toISOString(),
+              retry_deadline_at: null,
+              automatic_retries: 0,
+              error:
+                signal.reason === "user_cancel"
+                  ? "用户取消本轮；已完成结果保留"
+                  : "已暂停，继续时优先恢复此项",
+            });
         } else {
-          const status: Task["status"] =
-            e.kind === "login"
-              ? "waiting_login"
-              : e.kind === "verification"
-                ? "waiting_verification"
-                : e.submitted
-                  ? "uncertain"
-                  : e.kind === "network" && task.attempts < 1
-                    ? "pending"
-                    : "failed";
           const diagnostic =
             this.deps.diagnostics === false
               ? null
               : await this.diagnostic(fresh, this.page, e);
-          // A control command may have arrived while diagnostic capture was in flight.
-          if (signal.aborted)
+          if (signal.aborted) {
             this.store.patchTask(task.id, {
-              status: signal.reason === "user_cancel" ? "cancelled" : "paused",
+              status:
+                signal.reason === "task_timeout"
+                  ? "skipped"
+                  : signal.reason === "user_cancel"
+                    ? "cancelled"
+                    : "paused",
+              finished_at:
+                signal.reason === "task_timeout"
+                  ? new Date().toISOString()
+                  : null,
               interruption_reason: String(signal.reason),
-              interrupted_at: new Date().toISOString(),
+              error: "操作已中断",
             });
-          else {
+          } else if (e.kind === "login" || e.kind === "verification") {
             this.store.patchTask(task.id, {
-              status,
+              status:
+                e.kind === "login" ? "waiting_login" : "waiting_verification",
               error: e.message,
               diagnostic,
-              finished_at:
-                status === "failed" ? new Date().toISOString() : null,
+              retry_deadline_at: new Date(
+                Math.min(deadline, Date.now() + 60000),
+              ).toISOString(),
+            });
+            this.notify(
+              "attention",
+              `${platformNames[task.platform]}：${e.message}；60 秒内未处理将跳过此项`,
+            );
+          } else if (
+            e.kind !== "mode" &&
+            (fresh.automatic_retries || 0) <
+              this.retryPolicy.automaticRetries &&
+            Date.now() < deadline
+          ) {
+            this.store.patchTask(task.id, {
+              status: "paused",
+              automatic_retries: (fresh.automatic_retries || 0) + 1,
+              interruption_reason: "auto_recovery",
+              diagnostic,
+              error: e.message,
+              ...(e.partial?.answer ? { answer: e.partial.answer } : {}),
+              ...(e.partial?.mode ? { mode: e.partial.mode } : {}),
+              ...(e.partial?.conversationUrl
+                ? { conversation_url: e.partial.conversationUrl }
+                : {}),
+            });
+            this.store.setBatchState(task.batch_id, "running", task.id);
+            this.store.event(
+              "auto_recovery",
+              `任务 ${task.id} 自动恢复 ${(fresh.automatic_retries || 0) + 1}/${this.retryPolicy.automaticRetries}，先核对原会话；${e.message}`,
+            );
+          } else {
+            this.store.patchTask(task.id, {
+              status: "skipped",
+              finished_at: new Date().toISOString(),
+              interruption_reason:
+                e.kind === "mode" ? "mode_unconfirmed" : "retries_exhausted",
+              error: `恢复次数已用完或无法安全继续，已跳过；${e.message}`,
+              diagnostic,
               ...(e.partial?.answer ? { answer: e.partial.answer } : {}),
               ...(e.partial?.mode ? { mode: e.partial.mode } : {}),
             });
-            if (
-              ["waiting_login", "waiting_verification", "uncertain"].includes(
-                status,
-              )
-            )
-              this.notify(
-                "attention",
-                `${platformNames[task.platform]}：${e.message}`,
-              );
+            this.notify(
+              "skipped",
+              `${platformNames[task.platform]} 任务 ${task.id} 已跳过，队列继续`,
+            );
           }
         }
         this.store.endAttempt(
@@ -360,6 +490,8 @@ export class Runner {
           e.message,
         );
       }
+      clearInterval(watchdog);
+      clearTimeout(deadlineTimer);
       this.finishBatch(task.batch_id);
       this.current = null;
       this.page = undefined;
@@ -387,7 +519,7 @@ export class Runner {
         .run(new Date().toISOString(), id);
       this.notify(
         tasks.every((t) => t.status === "succeeded") ? "complete" : "warning",
-        `第 ${id} 轮完成：${tasks.filter((t) => t.status === "succeeded").length}/${tasks.length} 成功`,
+        `第 ${id} 轮完成：${tasks.filter((t) => t.status === "succeeded").length}/${tasks.length} 成功，${tasks.filter((t) => t.status === "skipped").length} 项跳过`,
       );
     }
   }
@@ -415,6 +547,14 @@ export class Runner {
           )
             this.store.patchTask(t.id, {
               status: submitted(t) ? "paused" : "pending",
+              retry_deadline_at: null,
+              automatic_retries: 0,
+            });
+        for (const t of this.store.tasks({ batchId: Number(b.id) }))
+          if (t.status === "paused")
+            this.store.patchTask(t.id, {
+              retry_deadline_at: null,
+              automatic_retries: 0,
             });
         this.store.setBatchState(Number(b.id), "running");
       }
@@ -476,7 +616,9 @@ export class Runner {
       const t = this.store.task(id);
       if (
         !t ||
-        !["failed", "partial", "uncertain", "cancelled"].includes(t.status)
+        !["failed", "partial", "uncertain", "skipped", "cancelled"].includes(
+          t.status,
+        )
       )
         throw new Error("此任务当前不能重新采集");
       this.assertIdle();

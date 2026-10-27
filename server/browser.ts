@@ -22,7 +22,13 @@ export class BrowserPool {
           locale: "zh-CN",
           timezoneId: "Asia/Shanghai",
           acceptDownloads: false,
-          args: ["--no-first-run", "--no-default-browser-check"],
+          args: [
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--disable-background-timer-throttling",
+            "--disable-renderer-backgrounding",
+            "--disable-backgrounding-occluded-windows",
+          ],
         },
       );
       this.contexts.set(platform, context);

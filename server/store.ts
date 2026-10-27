@@ -21,11 +21,11 @@ export class Store {
     const version = Number(
       this.db.prepare("PRAGMA user_version").get()!.user_version,
     );
-    if (version > 4) throw new Error("数据库版本高于当前程序，请升级程序");
-    if (version > 0 && version < 4 && databasePath !== ":memory:") {
+    if (version > 5) throw new Error("数据库版本高于当前程序，请升级程序");
+    if (version > 0 && version < 5 && databasePath !== ":memory:") {
       const backupDir = join(dirname(databasePath), "backups");
       mkdirSync(backupDir, { recursive: true, mode: 0o700 });
-      const backup = join(backupDir, `before-v4-${Date.now()}.sqlite`);
+      const backup = join(backupDir, `before-v5-${Date.now()}.sqlite`);
       this.db.exec(`VACUUM INTO '${backup.replaceAll("'", "''")}'`);
       chmodSync(backup, 0o600);
     }
@@ -68,6 +68,12 @@ export class Store {
       this.transaction(() => {
         this.db.exec(
           "CREATE TABLE baseline_reviews(task_id INTEGER PRIMARY KEY REFERENCES tasks(id),payload TEXT NOT NULL,updated_at TEXT NOT NULL); PRAGMA user_version=4;",
+        );
+      });
+    if (version < 5)
+      this.transaction(() => {
+        this.db.exec(
+          "ALTER TABLE tasks ADD COLUMN retry_deadline_at TEXT; ALTER TABLE tasks ADD COLUMN automatic_retries INTEGER NOT NULL DEFAULT 0; PRAGMA user_version=5;",
         );
       });
     if (!this.getSetting("schedule"))
@@ -260,8 +266,8 @@ export class Store {
       const insert = this.db.prepare(
         "INSERT INTO tasks(batch_id,question_id,question_text,question_version,group_name,platform) VALUES (?,?,?,?,?,?)",
       );
-      for (const platform of platforms)
-        for (const q of questions)
+      for (const q of questions)
+        for (const platform of platforms)
           insert.run(id, q.id, q.text, q.version, q.group_name, platform);
       return id;
     });
@@ -425,6 +431,8 @@ export class Store {
       "finished_at",
       "error",
       "diagnostic",
+      "retry_deadline_at",
+      "automatic_retries",
       "interruption_reason",
       "interrupted_at",
     ]);
@@ -465,7 +473,7 @@ export class Store {
   batches() {
     return this.db
       .prepare(
-        `SELECT b.*, COUNT(t.id) total, SUM(t.status='succeeded') succeeded, SUM(t.status='partial') partial, SUM(t.status='failed') failed, SUM(t.status IN ('waiting_login','waiting_verification','uncertain')) waiting, SUM(t.status='paused') paused, SUM(t.status='running') running, SUM(t.status='pending') pending, SUM(t.status='cancelled') cancelled, SUM(t.deleted_at IS NOT NULL) removed FROM batches b LEFT JOIN tasks t ON t.batch_id=b.id GROUP BY b.id ORDER BY b.id DESC`,
+        `SELECT b.*, COUNT(t.id) total, SUM(t.status='succeeded') succeeded, SUM(t.status='partial') partial, SUM(t.status='failed') failed, SUM(t.status IN ('waiting_login','waiting_verification','uncertain')) waiting, SUM(t.status='paused') paused, SUM(t.status='running') running, SUM(t.status='pending') pending, SUM(t.status='skipped') skipped, SUM(t.status='cancelled') cancelled, SUM(t.deleted_at IS NOT NULL) removed FROM batches b LEFT JOIN tasks t ON t.batch_id=b.id GROUP BY b.id ORDER BY b.id DESC`,
       )
       .all();
   }

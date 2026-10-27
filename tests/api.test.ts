@@ -352,3 +352,38 @@ test("基线API配置重算历史、记录核对、分平台时间筛选、导�
   );
   check.close();
 });
+test("恢复策略可配置并校验单次时限，状态接口返回当前策略", async () => {
+  assert.equal(
+    (
+      await request(
+        "/settings",
+        {
+          retryPolicy: {
+            totalSeconds: 300,
+            attemptSeconds: 120,
+            automaticRetries: 1,
+          },
+        },
+        "PATCH",
+      )
+    ).status,
+    200,
+  );
+  assert.equal((await request("/state")).data.retryPolicy.totalSeconds, 300);
+  assert.equal(
+    (
+      await request(
+        "/settings",
+        {
+          retryPolicy: {
+            totalSeconds: 60,
+            attemptSeconds: 120,
+            automaticRetries: 1,
+          },
+        },
+        "PATCH",
+      )
+    ).status,
+    400,
+  );
+});

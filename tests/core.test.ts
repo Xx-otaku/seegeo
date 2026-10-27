@@ -159,7 +159,7 @@ test("v1迁移备份数据库并将三条手动暂停遗留项纳入恢复，旧
     });
   store.setSetting("paused", true);
   store.db.exec(
-    "DROP TABLE task_attempts; DROP TABLE baseline_reviews; ALTER TABLE tasks DROP COLUMN deleted_at; ALTER TABLE batches DROP COLUMN control_state; ALTER TABLE batches DROP COLUMN resume_task_id; ALTER TABLE batches DROP COLUMN parent_batch_id; ALTER TABLE tasks DROP COLUMN interruption_reason; ALTER TABLE tasks DROP COLUMN interrupted_at; PRAGMA user_version=1;",
+    "DROP TABLE task_attempts; DROP TABLE baseline_reviews; ALTER TABLE tasks DROP COLUMN retry_deadline_at; ALTER TABLE tasks DROP COLUMN automatic_retries; ALTER TABLE tasks DROP COLUMN deleted_at; ALTER TABLE batches DROP COLUMN control_state; ALTER TABLE batches DROP COLUMN resume_task_id; ALTER TABLE batches DROP COLUMN parent_batch_id; ALTER TABLE tasks DROP COLUMN interruption_reason; ALTER TABLE tasks DROP COLUMN interrupted_at; PRAGMA user_version=1;",
   );
   store.close();
   store = new Store(path);
@@ -259,5 +259,18 @@ test("采集记录批量删除清除答案来源和尝试，保留整轮重跑�
   const next = s.cloneBatch(b);
   assert.equal(s.tasks({ batchId: next }).length, 2);
   assert.equal(s.questions().length, 2);
+  s.close();
+});
+test("新批次按问题轮换三平台，减少连续平台请求且保留矩阵范围", () => {
+  const s = new Store(":memory:");
+  s.importQuestions([{ text: "问题甲" }, { text: "问题乙" }]);
+  const b = s.createBatch("manual");
+  assert.deepEqual(
+    s
+      .tasks({ batchId: b })
+      .reverse()
+      .map((t) => t.platform),
+    ["doubao", "deepseek", "yuanbao", "doubao", "deepseek", "yuanbao"],
+  );
   s.close();
 });
