@@ -6,6 +6,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Store } from "./store.js";
+import { retryPolicySchema } from "./retry-policy.js";
 import { Runner } from "./runner.js";
 import {
   platformIds,
@@ -105,6 +106,7 @@ app.get("/api/state", () => ({
   dataDir,
   allowAutoSearch: store.getSetting("allowAutoSearch"),
   notifications: store.getSetting("notifications") !== false,
+  retryPolicy: runner.retryPolicy,
 }));
 app.get("/api/questions", () => {
   const tasks = store.latestResults();
@@ -334,6 +336,7 @@ app.patch("/api/settings", (req) => {
         .optional(),
       allowAutoSearch: z.boolean().optional(),
       notifications: z.boolean().optional(),
+      retryPolicy: retryPolicySchema.optional(),
     })
     .parse(req.body);
   if (body.schedule)
@@ -344,6 +347,7 @@ app.patch("/api/settings", (req) => {
     });
   if (body.allowAutoSearch !== undefined)
     store.setSetting("allowAutoSearch", body.allowAutoSearch);
+  if (body.retryPolicy) store.setSetting("retryPolicy", body.retryPolicy);
   if (body.notifications !== undefined)
     store.setSetting("notifications", body.notifications);
   store.event("settings", "监测设置已保存");

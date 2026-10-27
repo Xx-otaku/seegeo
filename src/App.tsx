@@ -39,6 +39,7 @@ import {
 } from "lucide-react";
 import { diffLines } from "diff";
 import Baseline from "./Baseline";
+import type { RetryPolicy } from "../server/retry-policy";
 import { readingText } from "./reading";
 import {
   platformIds,
@@ -74,6 +75,7 @@ type Batch = {
   pending: number;
   running: number;
   cancelled: number;
+  skipped?: number;
   control_state: string;
   paused: number;
   parent_batch_id: number | null;
@@ -105,6 +107,7 @@ type State = {
   dataDir: string;
   allowAutoSearch: boolean;
   notifications: boolean;
+  retryPolicy: RetryPolicy;
 };
 const labels: Record<string, string> = {
   paused: "已暂停",
@@ -117,6 +120,7 @@ const labels: Record<string, string> = {
   partial: "来源待核对",
   failed: "采集失败",
   cancelled: "已取消",
+  skipped: "超时 / 异常跳过",
 };
 function fmt(value?: string | null) {
   return value
@@ -975,12 +979,17 @@ function TaskToolbar({
     waiting: "需要人工处理",
     cancelling: "正在取消…",
     cancelled: "已取消",
+    skipped: "超时 / 异常跳过",
     completed: "本轮已结束",
     idle: "准备开始监测",
   };
   const task = state?.currentItem || state?.pausedTask;
   const completed = batch
-    ? batch.succeeded + batch.partial + batch.failed + batch.cancelled
+    ? batch.succeeded +
+      batch.partial +
+      batch.failed +
+      (batch.skipped || 0) +
+      batch.cancelled
     : 0;
   const resume = status === "paused" || status === "waiting";
   const control = state?.controls[resume ? "resume" : "pause"];
@@ -1014,7 +1023,7 @@ function TaskToolbar({
             {task && active
               ? `${platformNames[task.platform]} · ${task.question_text}`
               : batch
-                ? `${batch.succeeded} 项成功 · ${batch.partial} 项来源待核对 · ${batch.failed} 项失败${batch.cancelled ? ` · ${batch.cancelled} 项取消` : ""}`
+                ? `${batch.succeeded} 项成功 · ${batch.partial} 项来源待核对 · ${batch.failed} 项失败 · ${batch.skipped || 0} 项跳过${batch.cancelled ? ` · ${batch.cancelled} 项取消` : ""}`
                 : state?.schedule.enabled
                   ? `下次计划 ${fmt(state.nextRun)} · 北京时间`
                   : "自动监测已关闭，可手动开始"}
@@ -1345,7 +1354,7 @@ function Answer({ task, act }: { task: Task | undefined; act: Act }) {
             核对并恢复
           </button>
         )}
-        {["uncertain", "partial", "failed", "cancelled"].includes(
+        {["uncertain", "partial", "failed", "skipped", "cancelled"].includes(
           task.status,
         ) && (
           <button
@@ -1395,7 +1404,7 @@ function Answer({ task, act }: { task: Task | undefined; act: Act }) {
           </p>
         )}
       {retryReason &&
-        ["uncertain", "partial", "failed", "cancelled"].includes(
+        ["uncertain", "partial", "failed", "skipped", "cancelled"].includes(
           task.status,
         ) && (
           <p className="action-reason" id={`retry-reason-${task.id}`}>
@@ -1982,6 +1991,7 @@ function Records({
 function Settings({ state, act }: { state: State; act: Act }) {
   const { busy } = useContext(OperationContext);
   const [exited, setExited] = useState(false);
+  const [policy, setPolicy] = useState(state.retryPolicy);
   const [schedule, setSchedule] = useState(state.schedule),
     [auto, setAuto] = useState(state.allowAutoSearch),
     [notifications, setNotifications] = useState(state.notifications);
@@ -2002,7 +2012,12 @@ function Settings({ state, act }: { state: State; act: Act }) {
               () =>
                 api(
                   "/settings",
-                  { schedule, allowAutoSearch: auto, notifications },
+                  {
+                    schedule,
+                    allowAutoSearch: auto,
+                    notifications,
+                    retryPolicy: policy,
+                  },
                   "PATCH",
                 ),
               "设置已保存",
@@ -2092,6 +2107,66 @@ function Settings({ state, act }: { state: State; act: Act }) {
           </label>
           <p className="field-help">
             可在 macOS 通知设置中允许通知；面板始终保留事件记录。
+          </p>
+          <h3>异常恢复与超时跳过</h3>
+          <div className="schedule-fields">
+            <label>
+              每项总时限（分钟）
+              <input
+                aria-label="每项总时限（分钟）"
+                type="number"
+                min="0.5"
+                max="30"
+                step="0.5"
+                required
+                value={policy.totalSeconds / 60}
+                onChange={(e) =>
+                  setPolicy({
+                    ...policy,
+                    totalSeconds: Math.round(Number(e.target.value) * 60),
+                  })
+                }
+              />
+            </label>
+            <label>
+              单次等待（秒）
+              <input
+                aria-label="单次等待（秒）"
+                type="number"
+                min="15"
+                max={Math.min(600, policy.totalSeconds)}
+                step="15"
+                required
+                value={policy.attemptSeconds}
+                onChange={(e) =>
+                  setPolicy({
+                    ...policy,
+                    attemptSeconds: Number(e.target.value),
+                  })
+                }
+              />
+            </label>
+            <label>
+              自动恢复次数
+              <input
+                aria-label="自动恢复次数"
+                type="number"
+                min="0"
+                max="3"
+                required
+                value={policy.automaticRetries}
+                onChange={(e) =>
+                  setPolicy({
+                    ...policy,
+                    automaticRetries: Number(e.target.value),
+                  })
+                }
+              />
+            </label>
+          </div>
+          <p className="field-help">
+            总时限包含打开页面、生成、恢复和来源提取，达到时限后标为跳过并继续下一项。提交过的项先恢复原会话，不能恢复时再新建一次；登录或验证码最多等待
+            60 秒。手动暂停后继续会重新计时。
           </p>
           <button className="button primary" type="submit">
             <Check size={15} />

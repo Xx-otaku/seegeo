@@ -2122,3 +2122,7 @@ tbody tr.selected {
     scroll-margin-top: 205px;
   }
 }
+
+.badge.skipped {
+  color: var(--amber);
+}
