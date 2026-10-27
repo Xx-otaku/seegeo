@@ -363,18 +363,23 @@ export async function extractSources(
           .locator('[class*="footer-website-"]')
           .innerText()
           .catch(() => "");
-        // Source cards expose their destination through a normal click, not href.
-        const popupPromise = page.waitForEvent("popup", { timeout: 5000 });
+        // Doubao opens a redirect in a new tab; PDF destinations can immediately
+        // become downloads and close the tab before its URL is observable. Capture
+        // the redirect request itself, which contains the destination in `target`.
+        const context = page.context();
+        const redirect = context.waitForEvent("request", {
+          predicate: (req) => req.isNavigationRequest() && req.url().startsWith("https://link.wtturl.cn/"),
+          timeout: 6000,
+        }).then((req) => req.url()).catch(() => "");
+        const popupPromise = page.waitForEvent("popup", { timeout: 6000 }).catch(() => null);
         await pop.locator('[class^="title-"]').click();
-        const popup = await popupPromise;
-        await popup
-          .waitForURL(
-            (url) => url.protocol === "http:" || url.protocol === "https:",
-            { timeout: 5000, waitUntil: "commit" },
-          )
-          .catch(() => {});
-        let url = popup.url();
-        await popup.close();
+        const [redirectUrl, popup] = await Promise.all([redirect, popupPromise]);
+        let url = redirectUrl;
+        if (!url && popup && !popup.isClosed()) {
+          await popup.waitForURL((u) => u.protocol === "http:" || u.protocol === "https:", { timeout: 5000, waitUntil: "commit" }).catch(() => {});
+          url = popup.url();
+        }
+        if (popup && !popup.isClosed()) await popup.close().catch(() => {});
         const parsed = new URL(url);
         if (
           parsed.hostname === "link.wtturl.cn" &&

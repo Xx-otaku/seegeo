@@ -98,3 +98,15 @@ test("Doubao rejects a broken or noncontiguous visible list", async () => {
   const result = await extractSources(page, "doubao", page.locator('[data-testid="message_text_content"]'));
   assert.equal(result.status, "failed");
 });
+
+test("Doubao preserves a citation URL when opening it starts a PDF download", async () => {
+  const redirect = 'https://link.wtturl.cn/?target=' + encodeURIComponent('https://gov.example/guide.pdf');
+  await page.context().route('https://link.wtturl.cn/**', route => route.fulfill({ status: 200, headers: { 'content-type': 'application/pdf', 'content-disposition': 'attachment; filename="guide.pdf"' }, body: 'fixture' }));
+  try {
+    await page.setContent(`<div data-testid="receive_message"><div>搜索 1 个关键词，参考 1 篇资料</div><a data-thinking-box-tool-call href="https://example.com/a">1.参考资料</a><div data-testid="message_text_content">正文 <span class="container-sWvQla">政府资料</span></div></div><div class="semi-popover-wrapper-show" role="tooltip"><div class="footer-website-a">政府网站</div><div class="title-a" onclick="window.open('${redirect}', '_blank')">资料手册</div></div>`);
+    const result = await extractSources(page, 'doubao', page.locator('[data-testid="message_text_content"]'));
+    assert.equal(result.status, 'extracted');
+    assert.equal(result.sources.find(s => s.kind === 'citation')?.url, 'https://gov.example/guide.pdf');
+    assert.equal(result.evidence?.citations, 'present');
+  } finally { await page.context().unroute('https://link.wtturl.cn/**'); }
+});
