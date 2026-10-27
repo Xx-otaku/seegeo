@@ -87,9 +87,10 @@ type State = {
   pausedTask: Pick<Task, "id" | "platform" | "question_text" | "phase"> | null;
   currentItem: Task | null;
   controls: Record<
-    "start" | "pause" | "resume" | "cancel" | "rerun",
+    "start" | "pause" | "resume" | "cancel" | "rerun" | "retryUnfinished",
     { enabled: boolean; reason: string | null }
   >;
+  retrySummary: { total: number; platforms: Record<Platform, number> };
   token: string;
   paused: boolean;
   busy: boolean;
@@ -1076,6 +1077,21 @@ function TaskToolbar({
           </button>
         )}
         <button
+          className="button"
+          disabled={busy || !state?.controls.retryUnfinished?.enabled}
+          title={state?.controls.retryUnfinished?.reason || "仅重采各问题与平台最新的未完成结果，优先核对原会话"}
+          onClick={() => {
+            const summary = state?.retrySummary;
+            if (!summary?.total) return;
+            const breakdown = platformIds.filter(p => summary.platforms[p]).map(p => `${platformNames[p]} ${summary.platforms[p]} 项`).join("、");
+            if (window.confirm(`将重新处理 ${summary.total} 项未完成任务（${breakdown}）。已完成或主动取消的任务不会重采；已提交的任务先核对原会话。现在开始吗？`))
+              void act(() => api("/batches/retry-unfinished", {}), "已创建未完成任务补采批次");
+          }}
+        >
+          <RotateCcw size={14} />
+          一键重采未完成{state?.retrySummary?.total ? `（${state.retrySummary.total}）` : ""}
+        </button>
+        <button
           className="button primary"
           disabled={busy || !state?.controls.start.enabled}
           title={state?.controls.start.reason || "选择本轮问题与平台"}
@@ -1765,7 +1781,7 @@ function Records({
               {fmt(state.batches[0].created_at)} ·{" "}
               {state.batches[0].trigger === "schedule"
                 ? "定时采集"
-                : state.batches[0].trigger === "retry"
+                : ["retry", "bulk_retry"].includes(state.batches[0].trigger)
                   ? "手动重采"
                   : "手动采集"}
             </span>

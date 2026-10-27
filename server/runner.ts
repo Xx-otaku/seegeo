@@ -628,6 +628,16 @@ export class Runner {
       return next;
     });
   }
+  retryUnfinished() {
+    return this.serial(() => {
+      this.assertIdle();
+      const result = this.store.createRetryBatch();
+      this.store.setSetting("paused", false);
+      this.store.event("retry", `批量重采 ${result.count} 项，优先核对原会话`);
+      void this.work();
+      return result;
+    });
+  }
   releasePlatform(platform: string) {
     return this.serial(() => {
       const b = this.store.activeBatch();
@@ -735,6 +745,8 @@ export class Runner {
       enabled,
       reason: enabled ? null : reason,
     });
+    const candidates = this.store.retryCandidates();
+    const retrySummary = { total: candidates.length, platforms: Object.fromEntries(platformIds.map(p => [p, candidates.filter(t => t.platform === p).length])) };
     const pausedTask = b
       ? this.store
           .tasks({ batchId: Number(b.id) })
@@ -754,8 +766,10 @@ export class Runner {
           }
         : null,
       currentItem: this.current ? this.store.task(this.current) : null,
+      retrySummary,
       controls: {
         start: operation(!this.busy && !b, "请先完成或取消当前批次"),
+        retryUnfinished: operation(!this.busy && !b && candidates.length > 0, b || this.busy ? "请先完成或取消当前批次；暂停的任务可点击继续监测" : "当前没有需要重采的未完成任务"),
         pause: operation(
           !!b && !transitional && b.control_state !== "paused",
           "当前没有可暂停的监测",

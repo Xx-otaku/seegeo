@@ -369,6 +369,40 @@ export class Store {
       return next;
     });
   }
+  /** Latest result per enabled question/platform; old failures superseded by a later success are excluded. */
+  retryCandidates() {
+    const ids = this.db.prepare(`
+      SELECT t.id FROM tasks t
+      JOIN questions q ON q.id=t.question_id
+      JOIN (SELECT question_id,platform,MAX(id) AS id FROM tasks
+            WHERE deleted_at IS NULL GROUP BY question_id,platform) latest ON latest.id=t.id
+      JOIN batches b ON b.id=t.batch_id
+      WHERE q.deleted_at IS NULL AND q.enabled=1 AND b.finished_at IS NOT NULL
+        AND t.status IN ('failed','partial','uncertain','skipped','waiting_login','waiting_verification')
+      ORDER BY t.id
+    `).all();
+    return ids.map(row => this.task(Number(row.id))!).filter(Boolean);
+  }
+  createRetryBatch() {
+    return this.transaction(() => {
+      const tasks = this.retryCandidates();
+      if (!tasks.length) throw new Error("没有需要重采的未完成任务");
+      const result = this.db.prepare("INSERT INTO batches(trigger,created_at) VALUES ('bulk_retry',?)").run(new Date().toISOString());
+      const id = Number(result.lastInsertRowid);
+      const insert = this.db.prepare(`INSERT INTO tasks(batch_id,question_id,question_text,question_version,group_name,platform,phase,conversation_url,mode,model,started_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?)`);
+      for (const t of tasks) {
+        // A known submitted conversation is checked before any fresh submission.
+        const recover = !!t.conversation_url && !!t.mode &&
+          (['submitting','submitted','extracting','completed'].includes(t.phase));
+        insert.run(id,t.question_id,t.question_text,t.question_version,t.group_name,t.platform,
+          recover ? 'submitted' : 'queued', recover ? t.conversation_url : null,
+          recover ? JSON.stringify(t.mode) : null, recover ? t.model : null,
+          null);
+      }
+      return { batchId: id, count: tasks.length };
+    });
+  }
   beginAttempt(taskId: number, kind: string) {
     return Number(
       this.db

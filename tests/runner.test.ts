@@ -476,3 +476,59 @@ test("手动暂停不消耗自动恢复时限，继续后重新计时", async ()
   await runner.stop();
   store.close();
 });
+
+test("一键重采只处理最新未完成项，保留原问题快照并优先恢复原会话", async () => {
+  const recovered: string[] = [], collected: string[] = [];
+  const { store, runner, batch } = setup(
+    async (_p, _platform, q) => { collected.push(q); return capture(q); },
+    async (_p, _platform, q) => { recovered.push(q); return capture(q); },
+    4,
+  );
+  const original = store.tasks({batchId: batch}).reverse();
+  store.patchTask(original[0].id, { status:'skipped', phase:'submitted', conversation_url:capture().conversationUrl, mode:capture().mode });
+  store.patchTask(original[1].id, { status:'failed', phase:'opening' });
+  store.patchTask(original[2].id, { status:'skipped', phase:'submitted', conversation_url:capture().conversationUrl, mode:capture().mode });
+  store.patchTask(original[3].id, { status:'cancelled' });
+  store.db.prepare("UPDATE batches SET control_state='completed',finished_at=? WHERE id=?").run(new Date().toISOString(),batch);
+  const later = store.cloneBatch(batch, original[2].id);
+  store.completeTask(store.tasks({batchId:later})[0].id, capture());
+  store.db.prepare("UPDATE batches SET control_state='completed',finished_at=? WHERE id=?").run(new Date().toISOString(),later);
+  store.updateQuestion(original[0].question_id,{text:'改写后的问题'});
+  assert.deepEqual(store.retryCandidates().map(t=>t.id), [original[0].id,original[1].id]);
+  assert.equal(runner.controls().retrySummary.total,2);
+  const result=await runner.retryUnfinished();
+  await until(()=>!runner.busy);
+  assert.equal(result.count,2);
+  const tasks=store.tasks({batchId:result.batchId});
+  assert.deepEqual(tasks.map(t=>t.question_text).sort(),[original[0].question_text,original[1].question_text].sort());
+  assert.deepEqual(recovered,[original[0].question_text]);
+  assert.deepEqual(collected,[original[1].question_text]);
+  assert.ok(tasks.every(t=>t.status==='succeeded'));
+  assert.equal(store.task(original[0].id)?.status,'skipped');
+  assert.equal(store.retryCandidates().length,0);
+  await assert.rejects(runner.retryUnfinished(),/没有需要重采/);
+  await runner.stop();store.close();
+});
+
+test("一键重采在当前批次未完成时拒绝重复启动", async () => {
+  const {store,runner}=setup(async()=>capture(),undefined,1);
+  await assert.rejects(runner.retryUnfinished(),/完成或取消/);
+  assert.equal(store.batches().length,1);
+  await runner.stop();store.close();
+});
+
+test("一键重采的重复请求只创建一个批次", async () => {
+  const entered=defer(), release=defer<Capture>();
+  const {store,runner,batch}=setup(async()=>{entered.resolve();return release.promise;},undefined,1);
+  const original=store.tasks({batchId:batch})[0];
+  store.patchTask(original.id,{status:'failed'});
+  store.db.prepare("UPDATE batches SET control_state='completed',finished_at=? WHERE id=?").run(new Date().toISOString(),batch);
+  const first=runner.retryUnfinished();
+  const second=runner.retryUnfinished();
+  const result=await first; await entered.promise;
+  await assert.rejects(second,/完成或取消/);
+  assert.equal(store.batches().length,2);
+  release.resolve(capture());await until(()=>!runner.busy);
+  assert.equal(store.tasks({batchId:result.batchId})[0].status,'succeeded');
+  await runner.stop();store.close();
+});

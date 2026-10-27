@@ -268,6 +268,7 @@ app.post("/api/batches", async (req) => {
   );
   return { batchId };
 });
+app.post("/api/batches/retry-unfinished", async () => runner.retryUnfinished());
 app.post("/api/pause", async () => {
   await runner.pause();
   return { ok: true };

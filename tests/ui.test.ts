@@ -107,6 +107,7 @@ test(
       const command =
         route.request().method() === "POST" &&
         (path === "/api/batches" ||
+          path === "/api/batches/retry-unfinished" ||
           path === "/api/pause" ||
           path === "/api/resume" ||
           /^\/api\/(batches\/\d+\/(cancel|rerun)|tasks\/\d+\/(retry|recover|open)|platforms\/.+\/login)$/.test(
@@ -115,7 +116,7 @@ test(
       if (command) {
         calls.push(path);
         await new Promise((r) => setTimeout(r, 60));
-        if (path === "/api/batches" || /\/(retry|rerun)$/.test(path))
+        if (path === "/api/batches" || path === "/api/batches/retry-unfinished" || /\/(retry|rerun)$/.test(path))
           virtual = {
             id: seq++,
             control_state: "running",
@@ -154,6 +155,18 @@ test(
       await page
         .getByRole("heading", { name: "问题监测", exact: true })
         .waitFor();
+      const retryAll = page.getByRole("button", { name: "一键重采未完成（1）", exact: true });
+      await retryAll.waitFor();
+      page.once("dialog", d => d.dismiss());
+      await retryAll.click();
+      assert.ok(!calls.includes("/api/batches/retry-unfinished"));
+      page.once("dialog", d => d.accept());
+      await retryAll.click();
+      await page.getByText("正在监测", { exact: true }).waitFor();
+      assert.ok(calls.includes("/api/batches/retry-unfinished"));
+      await page.getByRole("button", { name: "取消监测", exact: true }).click();
+      await page.getByRole("button", { name: "重新运行本轮", exact: true }).waitFor();
+      virtual = null;
       await page.getByRole("button", { name: "导入问题", exact: true }).click();
       await page.getByLabel("问题内容").fill("新增测试问题\n批量待移除问题");
       await page
