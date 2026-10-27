@@ -68,3 +68,19 @@ test("stable answer text alone is not a completion signal", async () => {
   await page.setContent(fixture());
   assert.equal(await isComplete(page, "deepseek"), true);
 });
+
+test("question ownership ignores only rendering whitespace, never missing or changed words", async () => {
+  const { normalizeQuestion } = await import("../server/collector.js");
+  assert.equal(
+    normalizeQuestion(
+      "睢宁500平水包砂工程，鑫君威和三棵树怎么比总成本和供货？",
+    ),
+    normalizeQuestion(
+      "睢宁 500 平水包砂工程，鑫君威和三棵树怎么比总成本和供货？",
+    ),
+  );
+  assert.notEqual(
+    normalizeQuestion("睢宁500平真石漆"),
+    normalizeQuestion("睢宁500平水包砂"),
+  );
+});

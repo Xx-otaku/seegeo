@@ -30,6 +30,10 @@ export const selectors = {
     stop: '#yuanbao-send-btn[aria-label="停止回答"]',
   },
 } as const;
+/** Platforms may insert presentation whitespace around numbers/CJK; all other characters must match. */
+export function normalizeQuestion(value: string) {
+  return value.normalize("NFKC").replace(/[\s\u200b\u200c\u200d\ufeff]+/g, "");
+}
 async function visible(locator: Locator) {
   return await locator
     .first()
@@ -622,7 +626,7 @@ export async function collect(
             .count()) > 0);
       userConfirmed ||= (
         await page.locator(selectors[p].human).allInnerTexts()
-      ).some((t) => t.trim() === question.trim());
+      ).some((t) => normalizeQuestion(t) === normalizeQuestion(question));
       onPhase("submitted");
       stable = text && text === previous ? stable + 1 : 0;
       previous = text;
@@ -655,7 +659,10 @@ export async function collect(
       );
     const human = page.locator(selectors[p].human);
     const texts = await human.allInnerTexts();
-    if (!userConfirmed && !texts.some((t) => t.trim() === question.trim()))
+    if (
+      !userConfirmed &&
+      !texts.some((t) => normalizeQuestion(t) === normalizeQuestion(question))
+    )
       throw new CollectorError(
         "无法将回答与本次问题核对，需人工检查会话",
         "uncertain",
@@ -717,7 +724,9 @@ export async function recoverExisting(
       throw new CollectorError("原会话恢复已中断", "cancelled", true);
     await checkAccess(page);
     let humans = await page.locator(selectors[p].human).allInnerTexts();
-    confirmed = humans.some((t) => t.trim() === question.trim());
+    confirmed = humans.some(
+      (t) => normalizeQuestion(t) === normalizeQuestion(question),
+    );
     if (confirmed) break;
     if (p === "doubao") {
       const list = page.locator('[data-testid="message-list"]');
