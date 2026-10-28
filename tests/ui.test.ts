@@ -279,8 +279,9 @@ test(
         1,
       );
       await page.getByRole("button", { name: "基线分析", exact: true }).click();
+      await page.getByRole("button", { name: "品牌设置与逐题核对", exact: true }).click();
       await page
-        .getByRole("heading", { name: "品牌表现", exact: true })
+        .getByRole("heading", { name: "样本明细与人工核对", exact: true })
         .waitFor();
       await page
         .getByRole("button", { name: "品牌与竞品配置", exact: true })

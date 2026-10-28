@@ -38,7 +38,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { diffLines } from "diff";
-import Baseline from "./Baseline";
+import RoundBaseline from "./RoundBaseline";
 import type { RetryPolicy } from "../server/retry-policy";
 import { readingText } from "./reading";
 import {
@@ -922,7 +922,8 @@ export default function App() {
                   </div>
                 )}
                 {view === "baseline" && (
-                  <Baseline
+                  <RoundBaseline
+                    batches={state?.batches || []}
                     request={api}
                     act={act}
                     busy={busy}
@@ -1889,7 +1890,7 @@ function Records({
             onClick={async () => {
               if (
                 !window.confirm(
-                  `删除所选 ${selected.length} 条采集记录？这些记录的回答和来源将从历史、导出及统计中移除，问题库和批次范围保留。`,
+                  `删除所选 ${selected.length} 条采集记录？这些记录的回答和来源将从历史、导出及统计中移除，问题库和批次范围保留；已保存的基线报告不会改变。`,
                 )
               )
                 return;

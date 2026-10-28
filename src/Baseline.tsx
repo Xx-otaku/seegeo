@@ -122,7 +122,7 @@ export default function Baseline({
         setError((e as Error).message);
         throw e;
       }
-    }, "品牌配置已保存，历史数据已重新统计");
+    }, "品牌配置已保存，已定稿报告保持不变");
   }
   return (
     <div className="baseline-page">
@@ -135,7 +135,7 @@ export default function Baseline({
               .slice(1)
               .map((b) => b.name)
               .join("、") || "未设置"}
-            。所有比例仅针对当前筛选样本。
+            。在此配置品牌并核对回答，汇总指标请查看本轮预览。
           </p>
         </div>
         <button className="button" onClick={() => setShowConfig(!showConfig)}>
@@ -326,173 +326,6 @@ export default function Baseline({
               <p>完成采集或调整筛选后，统计会使用实际回答，不生成示例数据。</p>
             </div>
           )}
-          <section className="baseline-section">
-            <h2>品牌表现</h2>
-            <p className="baseline-method">
-              提及率＝提及该品牌的回答数 ÷
-              有效回答数。声量份额＝该品牌名称及别名出现次数 ÷
-              已配置品牌总出现次数。仅按回答正文匹配，别名重叠不重复计数。
-            </p>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>品牌</th>
-                    <th>提及回答</th>
-                    <th>品牌提及率</th>
-                    <th>提及次数</th>
-                    <th>品牌声量份额</th>
-                    <th>进入前三</th>
-                    <th>TOP3 率</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {report.brands.map((b, i) => (
-                    <tr key={b.name}>
-                      <td>
-                        <strong>{b.name}</strong>
-                        {i === 0 && (
-                          <small className="muted"> · 目标品牌</small>
-                        )}
-                      </td>
-                      <td>
-                        {b.mentioned} / {scope!.answers}
-                      </td>
-                      <td>{percent(b.mentionRate)}</td>
-                      <td>{b.mentions}</td>
-                      <td>
-                        {scope!.totalMentions
-                          ? percent(b.voiceShare)
-                          : "无品牌提及"}
-                      </td>
-                      <td>
-                        {b.top3Count} / {scope!.ranked}
-                      </td>
-                      <td>
-                        {b.top3Rate === null ? "未判定" : percent(b.top3Rate)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <p className="baseline-method">
-              TOP3 分母为已判定排名的 {scope!.ranked} 条回答；未判定{" "}
-              {scope!.rankUnjudged} 条、人工标为不适用{" "}
-              {scope!.rankNotApplicable}{" "}
-              条均排除。自动只识别带数字序号且包含已配置品牌的列表，首次提到的品牌不等于排名第一。可在下方逐条人工纠正。
-            </p>
-          </section>
-          <div className="baseline-columns">
-            <section className="baseline-section">
-              <h2>各网站占总信源比例</h2>
-              <p className="baseline-method">
-                {sourceKind === "citation" ? "正文实际引用" : "检索参考列表"}共{" "}
-                {scope!.totalSources} 条；同一回答内相同 URL
-                去重，跨回答重复引用分别计次。www
-                与主机名归并；不同子域单列。不是全网流量或独立文章市占率。
-              </p>
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>网站</th>
-                      <th>信源数</th>
-                      <th>占比</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {report.websites.map((s) => (
-                      <tr key={s.site}>
-                        <td>{s.site}</td>
-                        <td>{s.count}</td>
-                        <td>
-                          <Share value={s.share} />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {!report.websites.length && (
-                  <p className="table-empty">当前口径没有可统计信源。</p>
-                )}
-              </div>
-            </section>
-            <section className="baseline-section">
-              <h2>{scope!.target}的情感倾向</h2>
-              <p className="baseline-method">
-                针对目标品牌的人工核对结果。已核对 {reviewed} 条，未核对{" "}
-                {report.sentiment.unreviewed} 条；未提及目标品牌{" "}
-                {report.sentiment.notMentioned} 条不进入分母。不将未知归为中性。
-              </p>
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>倾向</th>
-                      <th>回答数</th>
-                      <th>已核对样本占比</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Object.entries(sentimentNames).map(([key, name]) => (
-                      <tr key={key}>
-                        <td>{name}</td>
-                        <td>
-                          {report.sentiment[key as keyof typeof sentimentNames]}
-                        </td>
-                        <td>
-                          <Share
-                            value={
-                              reviewed
-                                ? report.sentiment[
-                                    key as keyof typeof sentimentNames
-                                  ] / reviewed
-                                : null
-                            }
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          </div>
-          <section className="baseline-section">
-            <h2>AI 回答各内容结构占比</h2>
-            <p className="baseline-method">
-              按保存的标题、表格与段落格式规则识别，统计非空白字符数；无明确结构标记的文字归为“具体内容”。它是可复现的格式统计，不是语义审核。引用文章全文未采集，因此不能据此计算来源文章自身的结构占比。
-            </p>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>内容结构</th>
-                    <th>字符数</th>
-                    <th>正文字符占比</th>
-                    <th>包含该结构的回答</th>
-                    <th>回答覆盖率</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {report.structures.map((s) => (
-                    <tr key={s.name}>
-                      <td>{s.name}</td>
-                      <td>{s.characters}</td>
-                      <td>
-                        <Share value={s.share} />
-                      </td>
-                      <td>
-                        {s.answers} / {scope!.answers}
-                      </td>
-                      <td>{percent(s.coverage)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
           <section className="baseline-section baseline-samples">
             <h2>样本明细与人工核对</h2>
             <p className="baseline-method">
