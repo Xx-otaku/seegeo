@@ -1,3 +1,6 @@
+import ExcelJS from "exceljs";
+import { previewRound, publicationLinks } from "./round-service.js";
+import { canonicalSource } from "./baseline.js";
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
 import { z, ZodError } from "zod";
@@ -216,6 +219,49 @@ function baselineReport(query: unknown) {
     .filter((t) => !scope.group || t.group_name === scope.group);
   return buildBaseline(rows, config, reviews, sourceKind);
 }
+const webUrl = z.string().trim().url().refine(v => /^https?:\/\//i.test(v), '只支持 HTTP 或 HTTPS 链接');
+app.get('/api/publications', () => ({channels:store.db.prepare('SELECT * FROM publication_channels ORDER BY name').all(), links:publicationLinks(store)}));
+app.post('/api/publications/channels', req => {
+  const {name}=z.object({name:z.string().trim().min(1).max(80)}).parse(req.body);
+  store.db.prepare('INSERT OR IGNORE INTO publication_channels(name) VALUES (?)').run(name); return {ok:true};
+});
+app.delete<{Params:{id:string}}>('/api/publications/channels/:id', req => {
+  const channel=id(req.params.id); if (store.db.prepare('SELECT id FROM publication_links WHERE channel_id=?').get(channel)) throw new Error('渠道下仍有链接，请先移动或删除链接');
+  store.db.prepare('DELETE FROM publication_channels WHERE id=?').run(channel); return {ok:true};
+});
+app.post('/api/publications/links', req => {
+  const body=z.object({channelId:z.number().int().positive(),urls:z.array(webUrl).min(1).max(1000)}).parse(req.body);
+  return store.transaction(()=>{
+    if (!store.db.prepare('SELECT id FROM publication_channels WHERE id=?').get(body.channelId)) throw new Error('渠道不存在');
+    const known=new Set(publicationLinks(store).flatMap(l=>[l.url,...l.aliases]).map(canonicalSource)); let added=0;
+    for(const url of body.urls) {const key=canonicalSource(url);if(known.has(key))continue;store.db.prepare('INSERT INTO publication_links(channel_id,url) VALUES (?,?)').run(body.channelId,url);known.add(key);added++;} return {added,skipped:body.urls.length-added};
+  });
+});
+app.patch<{Params:{id:string}}>('/api/publications/links/:id', req => {
+  const linkId=id(req.params.id);const body=z.object({channelId:z.number().int().positive(),url:webUrl,aliases:z.array(webUrl).max(100)}).parse(req.body);
+  return store.transaction(()=>{if(!publicationLinks(store).some(x=>x.id===linkId))throw new Error('链接不存在');if(!store.db.prepare('SELECT id FROM publication_channels WHERE id=?').get(body.channelId))throw new Error('渠道不存在');
+    const known=new Set(publicationLinks(store).filter(x=>x.id!==linkId).flatMap(x=>[x.url,...x.aliases]).map(canonicalSource));const own=new Set<string>();for(const url of [body.url,...body.aliases]){const key=canonicalSource(url);if(known.has(key)||own.has(key))throw new Error('链接或备用链接重复');own.add(key)}
+    store.db.prepare('UPDATE publication_links SET channel_id=?,url=?,aliases=? WHERE id=?').run(body.channelId,body.url,JSON.stringify(body.aliases),linkId);return {ok:true};});
+});
+app.post('/api/publications/links/bulk', req => {
+  const body=z.object({ids:z.array(z.number().int().positive()).min(1).max(1000),action:z.enum(['delete','move']),channelId:z.number().int().positive().optional()}).parse(req.body);
+  return store.transaction(()=>{const ids=[...new Set(body.ids)];if(body.action==='move' && (!body.channelId || !store.db.prepare('SELECT id FROM publication_channels WHERE id=?').get(body.channelId)))throw new Error('目标渠道不存在');
+    for(const linkId of ids){if(!store.db.prepare('SELECT id FROM publication_links WHERE id=?').get(linkId))throw new Error('链接不存在');if(body.action==='delete')store.db.prepare('DELETE FROM publication_links WHERE id=?').run(linkId);else store.db.prepare('UPDATE publication_links SET channel_id=? WHERE id=?').run(body.channelId!,linkId)}return {count:ids.length};});
+});
+app.get<{Params:{id:string}}>('/api/rounds/:id/preview', req => previewRound(store,id(req.params.id)));
+app.post<{Params:{id:string}}>('/api/rounds/:id/snapshots', req => {
+  const root=id(req.params.id);if(runner.busy || store.hasUnfinished()) throw new Error('请先完成或暂停所有监测并结束当前批次后再保存');return store.transaction(()=>{const payload=previewRound(store,root);if(!payload.rootBatch.finished_at)throw new Error('请等待本轮结束后保存');const revision=Number(store.db.prepare('SELECT COALESCE(MAX(revision),0)+1 AS n FROM baseline_snapshots WHERE root_batch_id=?').get(root)!.n);const result=store.db.prepare('INSERT INTO baseline_snapshots(root_batch_id,revision,created_at,payload) VALUES (?,?,?,?)').run(root,revision,new Date().toISOString(),JSON.stringify(payload));return {id:Number(result.lastInsertRowid),revision};});
+});
+app.get('/api/rounds/snapshots', () => store.db.prepare('SELECT id,root_batch_id,revision,created_at,payload FROM baseline_snapshots ORDER BY root_batch_id DESC,revision DESC').all().map(r=>({...r,payload:JSON.parse(String(r.payload))})));
+app.delete<{Params:{id:string}}>('/api/rounds/snapshots/:id', req => {store.db.prepare('DELETE FROM baseline_snapshots WHERE id=?').run(id(req.params.id));return {ok:true}});
+app.get<{Params:{id:string;format:string}}>('/api/rounds/snapshots/:id/export/:format', async (req,reply)=>{
+  const row=store.db.prepare('SELECT * FROM baseline_snapshots WHERE id=?').get(id(req.params.id));if(!row)throw new Error('报告不存在');const data=JSON.parse(String(row.payload));
+  if(req.params.format==='json')return reply.header('Content-Disposition',`attachment; filename="baseline-${row.id}.json"`).send(data);
+  if(req.params.format!=='xlsx')throw new Error('不支持的格式');const workbook=new ExcelJS.Workbook();const sheet=workbook.addWorksheet('基线汇总');sheet.addRow(['轮次','时间范围','AI平台','正文引用投放占比','检索参考投放占比','正文引用网站比例','检索参考网站比例','品牌提及率','品牌声量份额','TOP3率','应采数','完成数','品牌样本数','来源缺失数','排名未判定']);
+  const pct=(v:number|null)=>v===null?'无数据':`${(v*100).toFixed(1)}%`;const sites=(x:any)=>x.websites.map((v:any)=>`${v.site} ${pct(v.share)}`).join('\n')||'无来源';
+  for(const p of data.platforms)sheet.addRow([String(data.rootBatch.id),`${p.first||'—'} 至 ${p.last||'—'}`,p.platform,pct(p.sources.citation.share),pct(p.sources.search.share),sites(p.sources.citation),sites(p.sources.search),pct(p.target.mentionRate),pct(p.target.voiceShare),pct(p.target.top3Rate),p.expected,p.completed,p.brandSamples,p.sourceMissing,p.rankUnjudged]);
+  sheet.getRow(1).font={bold:true};sheet.columns.forEach(c=>{c.width=24});sheet.getColumn(6).alignment={wrapText:true};sheet.getColumn(7).alignment={wrapText:true};const buffer=await workbook.xlsx.writeBuffer();return reply.header('Content-Disposition',`attachment; filename="baseline-${row.id}.xlsx"`).type('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet').send(Buffer.from(buffer));
+});
 app.get("/api/baseline", (req) => baselineReport(req.query));
 app.get("/api/baseline/export", (req, reply) =>
   reply
