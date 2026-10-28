@@ -21,11 +21,11 @@ export class Store {
     const version = Number(
       this.db.prepare("PRAGMA user_version").get()!.user_version,
     );
-    if (version > 5) throw new Error("数据库版本高于当前程序，请升级程序");
-    if (version > 0 && version < 5 && databasePath !== ":memory:") {
+    if (version > 6) throw new Error("数据库版本高于当前程序，请升级程序");
+    if (version > 0 && version < 6 && databasePath !== ":memory:") {
       const backupDir = join(dirname(databasePath), "backups");
       mkdirSync(backupDir, { recursive: true, mode: 0o700 });
-      const backup = join(backupDir, `before-v5-${Date.now()}.sqlite`);
+      const backup = join(backupDir, `before-v6-${Date.now()}.sqlite`);
       this.db.exec(`VACUUM INTO '${backup.replaceAll("'", "''")}'`);
       chmodSync(backup, 0o600);
     }
@@ -76,6 +76,14 @@ export class Store {
           "ALTER TABLE tasks ADD COLUMN retry_deadline_at TEXT; ALTER TABLE tasks ADD COLUMN automatic_retries INTEGER NOT NULL DEFAULT 0; PRAGMA user_version=5;",
         );
       });
+    if (version < 6)
+      this.transaction(() => this.db.exec(`
+        ALTER TABLE tasks ADD COLUMN source_task_id INTEGER REFERENCES tasks(id);
+        CREATE TABLE publication_channels(id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE);
+        CREATE TABLE publication_links(id INTEGER PRIMARY KEY, channel_id INTEGER NOT NULL REFERENCES publication_channels(id), url TEXT NOT NULL, aliases TEXT NOT NULL DEFAULT '[]');
+        CREATE TABLE baseline_snapshots(id INTEGER PRIMARY KEY, root_batch_id INTEGER NOT NULL REFERENCES batches(id), revision INTEGER NOT NULL, created_at TEXT NOT NULL, payload TEXT NOT NULL, UNIQUE(root_batch_id,revision));
+        PRAGMA user_version=6;
+      `));
     if (!this.getSetting("schedule"))
       this.setSetting("schedule", {
         enabled: true,
@@ -355,7 +363,7 @@ export class Store {
         .run(taskId ? "retry" : "rerun", new Date().toISOString(), id);
       const next = Number(result.lastInsertRowid);
       const insert = this.db.prepare(
-        "INSERT INTO tasks(batch_id,question_id,question_text,question_version,group_name,platform) VALUES (?,?,?,?,?,?)",
+        "INSERT INTO tasks(batch_id,question_id,question_text,question_version,group_name,platform,source_task_id) VALUES (?,?,?,?,?,?,?)",
       );
       for (const t of tasks)
         insert.run(
@@ -365,6 +373,7 @@ export class Store {
           t.question_version,
           t.group_name,
           t.platform,
+          taskId ? t.id : null,
         );
       return next;
     });
@@ -389,8 +398,8 @@ export class Store {
       if (!tasks.length) throw new Error("没有需要重采的未完成任务");
       const result = this.db.prepare("INSERT INTO batches(trigger,created_at) VALUES ('bulk_retry',?)").run(new Date().toISOString());
       const id = Number(result.lastInsertRowid);
-      const insert = this.db.prepare(`INSERT INTO tasks(batch_id,question_id,question_text,question_version,group_name,platform,phase,conversation_url,mode,model,started_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?)`);
+      const insert = this.db.prepare(`INSERT INTO tasks(batch_id,question_id,question_text,question_version,group_name,platform,phase,conversation_url,mode,model,started_at,source_task_id)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`);
       for (const t of tasks) {
         // A known submitted conversation is checked before any fresh submission.
         const recover = !!t.conversation_url && !!t.mode &&
@@ -398,7 +407,7 @@ export class Store {
         insert.run(id,t.question_id,t.question_text,t.question_version,t.group_name,t.platform,
           recover ? 'submitted' : 'queued', recover ? t.conversation_url : null,
           recover ? JSON.stringify(t.mode) : null, recover ? t.model : null,
-          null);
+          null, t.id);
       }
       return { batchId: id, count: tasks.length };
     });
