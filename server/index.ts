@@ -1,5 +1,5 @@
 import ExcelJS from "exceljs";
-import { previewRound, publicationLinks } from "./round-service.js";
+import { previewRound, publicationLinks, dateRounds, previewDate, dateSelection } from "./round-service.js";
 import { canonicalSource } from "./baseline.js";
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
@@ -248,6 +248,13 @@ app.post('/api/publications/links/bulk', req => {
   return store.transaction(()=>{const ids=[...new Set(body.ids)];if(body.action==='move' && (!body.channelId || !store.db.prepare('SELECT id FROM publication_channels WHERE id=?').get(body.channelId)))throw new Error('目标渠道不存在');
     for(const linkId of ids){if(!store.db.prepare('SELECT id FROM publication_links WHERE id=?').get(linkId))throw new Error('链接不存在');if(body.action==='delete')store.db.prepare('DELETE FROM publication_links WHERE id=?').run(linkId);else store.db.prepare('UPDATE publication_links SET channel_id=? WHERE id=?').run(body.channelId!,linkId)}return {count:ids.length};});
 });
+app.get('/api/baseline/dates', () => [...new Set(dateRounds(store).map(b=>b.date))].filter(d=>dateSelection(store,d).questions.length>0).sort().reverse());
+app.get<{Params:{date:string}}>('/api/baseline/dates/:date', req => previewDate(store,req.params.date));
+app.post<{Params:{date:string}}>('/api/baseline/dates/:date/preview', req => {const {questionIds}=z.object({questionIds:z.array(z.number().int().positive()).min(1).max(1000)}).parse(req.body);return previewDate(store,req.params.date,[...new Set(questionIds)]);});
+app.post<{Params:{date:string}}>('/api/baseline/dates/:date/snapshots', req => {
+ const {questionIds}=z.object({questionIds:z.array(z.number().int().positive()).min(1).max(1000)}).parse(req.body);if(runner.busy||store.hasUnfinished())throw new Error('请先结束当前监测再保存');
+ return store.transaction(()=>{const payload=previewDate(store,req.params.date,[...new Set(questionIds)]);if(payload.batches.some(b=>!b.finished_at))throw new Error('请先结束所选日期的监测');const root=Number(payload.rootBatch.id);const revision=Number(store.db.prepare('SELECT COALESCE(MAX(revision),0)+1 AS n FROM baseline_snapshots WHERE root_batch_id=?').get(root)!.n);const result=store.db.prepare('INSERT INTO baseline_snapshots(root_batch_id,revision,created_at,payload) VALUES (?,?,?,?)').run(root,revision,new Date().toISOString(),JSON.stringify(payload));return {id:Number(result.lastInsertRowid),revision};});
+});
 app.get('/api/rounds', () => store.batches().filter(b => !['retry','bulk_retry'].includes(String(b.trigger))));
 app.get<{Params:{id:string}}>('/api/rounds/:id/preview', req => previewRound(store,id(req.params.id)));
 app.post<{Params:{id:string}}>('/api/rounds/:id/snapshots', req => {
@@ -260,7 +267,7 @@ app.get<{Params:{id:string;format:string}}>('/api/rounds/snapshots/:id/export/:f
   if(req.params.format==='json')return reply.header('Content-Disposition',`attachment; filename="baseline-${row.id}.json"`).send(data);
   if(req.params.format!=='xlsx')throw new Error('不支持的格式');const workbook=new ExcelJS.Workbook();const sheet=workbook.addWorksheet('基线汇总');sheet.addRow(['轮次','时间范围','AI平台','目标品牌','正文引用投放占比','检索参考投放占比','正文引用网站比例','检索参考网站比例','品牌提及率','品牌声量份额','TOP3率','应采数','完成数','品牌样本数','来源缺失数','排名未判定']);
   const pct=(v:number|null)=>v===null?'无数据':`${(v*100).toFixed(1)}%`;const sites=(x:any)=>x.websites.map((v:any)=>`${v.site} ${pct(v.share)}`).join('\n')||'无来源';
-  for(const p of data.platforms)sheet.addRow([String(data.rootBatch.id),`${p.first||'—'} 至 ${p.last||'—'}`,platformNames[p.platform as Platform],data.config.brands[0].name,pct(p.sources.citation.share),pct(p.sources.search.share),sites(p.sources.citation),sites(p.sources.search),pct(p.target.mentionRate),pct(p.target.voiceShare),pct(p.target.top3Rate),p.expected,p.completed,p.brandSamples,p.sourceMissing,p.rankUnjudged]);
+  for(const p of data.platforms)sheet.addRow([data.date || String(data.rootBatch.id),`${p.first||'—'} 至 ${p.last||'—'}`,platformNames[p.platform as Platform],data.config.brands[0].name,pct(p.sources.citation.share),pct(p.sources.search.share),sites(p.sources.citation),sites(p.sources.search),pct(p.target.mentionRate),pct(p.target.voiceShare),pct(p.target.top3Rate),p.expected,p.completed,p.brandSamples,p.sourceMissing,p.rankUnjudged]);
   sheet.getRow(1).font={bold:true};sheet.columns.forEach(c=>{c.width=24});sheet.getColumn(7).alignment={wrapText:true};sheet.getColumn(8).alignment={wrapText:true};const buffer=await workbook.xlsx.writeBuffer();return reply.header('Content-Disposition',`attachment; filename="baseline-${row.id}.xlsx"`).type('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet').send(Buffer.from(buffer));
 });
 app.get("/api/baseline", (req) => baselineReport(req.query));
@@ -272,6 +279,7 @@ app.get("/api/baseline/export", (req, reply) =>
     )
     .send(baselineReport(req.query)),
 );
+app.get("/api/baseline/config", () => store.getSetting<BaselineConfig>("baselineConfig") || defaultBaselineConfig);
 app.patch("/api/baseline/config", (req) => {
   const config = baselineConfigSchema.parse(req.body);
   store.setSetting("baselineConfig", config);
