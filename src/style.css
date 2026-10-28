@@ -2123,3 +2123,22 @@ tbody tr.selected {
 .badge.skipped {
   color: var(--amber);
 }
+
+/* Round report and publication library */
+.round-page { display: grid; gap: 24px; }
+.round-page > .round-actions { margin: 0; }
+.round-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0; }
+.round-section { border-top: 1px solid var(--line); padding-top: 22px; min-width: 0; }
+.round-section h3 { font-size: 17px; margin: 0 0 8px; }
+.round-section h4 { font-size: 14px; margin: 20px 0 8px; }
+.round-section p { color: var(--muted); font-size: 13px; line-height: 1.6; margin: 6px 0 12px; }
+.round-section textarea { display: block; width: min(100%, 620px); margin: 10px 0; }
+.round-section table { min-width: 950px; margin-top: 14px; }
+.round-check { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; }
+.round-check input { width: auto; margin: 0; }
+.round-links { margin: 12px 0; padding: 0; list-style: none; }
+.round-links li { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.round-links li label { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.round-links li input { width: auto; }
+.round-section > div > strong { font-size: 13px; }
+.round-section a { color: var(--blue); }

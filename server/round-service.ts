@@ -46,5 +46,5 @@ export function previewRound(store: Store, root: number) {
     const tasks=rows.filter(t=>t.platform===platform);const times=tasks.filter(t=>t.answer && ['succeeded','partial'].includes(t.status)).map(t=>t.finished_at||t.started_at).filter((x):x is string=>!!x).sort();
     return {platform,first:times[0]||null,last:times.at(-1)||null,...calculateRoundPlatform(tasks,config,links,reviews)};
   });
-  return {rootBatch,config,links,platforms,taskIds:rows.map(t=>t.id),reviews:Object.fromEntries(rows.filter(t=>reviews[String(t.id)]).map(t=>[String(t.id),reviews[String(t.id)]])),generatedAt:new Date().toISOString()};
+  return {rootBatch,config,links,platforms,scope:rows.map(t=>({questionId:t.question_id,version:t.question_version,platform:t.platform,answer:!!t.answer?.trim() && ['succeeded','partial'].includes(t.status),sources:t.status==='succeeded' && ['extracted','none'].includes(t.source_status||'')})).sort((a,b)=>a.questionId-b.questionId || a.platform.localeCompare(b.platform)),taskIds:rows.map(t=>t.id),reviews:Object.fromEntries(rows.filter(t=>reviews[String(t.id)]).map(t=>[String(t.id),reviews[String(t.id)]])),generatedAt:new Date().toISOString()};
 }
