@@ -1,0 +1,8 @@
+import {useEffect,useState} from 'react';
+type Config={brands:{name:string;aliases:string[]}[]};
+type Request=<T=any>(path:string,body?:unknown,method?:string)=>Promise<T>;
+export default function BrandSettings({request,act,busy}:{request:Request;act:(fn:()=>Promise<unknown>,message?:string)=>Promise<boolean>;busy:boolean}){
+ const [brands,setBrands]=useState<{name:string;aliases:string}[]>([]);const [error,setError]=useState('');
+ useEffect(()=>{void request<Config>('/baseline/config').then(c=>setBrands(c.brands.map(b=>({name:b.name,aliases:b.aliases.join('，')})))).catch(e=>setError(e.message))},[request]);
+ return <section className="round-section"><h3>品牌设置</h3><p>第一行为目标品牌，其他行为竞品；声量份额只包括这里配置的品牌。</p>{error&&<p className="warning-text">{error}</p>}{brands.map((b,i)=><div className="round-actions" key={i}><span>{i===0?'目标品牌':'竞品'}</span><input aria-label={i===0?'目标品牌':`竞品 ${i}`} value={b.name} onChange={e=>setBrands(brands.map((v,j)=>j===i?{...v,name:e.target.value}:v))}/><input aria-label={`品牌别名 ${i+1}`} value={b.aliases} placeholder="别名，以逗号分隔" onChange={e=>setBrands(brands.map((v,j)=>j===i?{...v,aliases:e.target.value}:v))}/>{i>0&&<button className="button" onClick={()=>setBrands(brands.filter((_,j)=>j!==i))}>删除</button>}</div>)}<div className="round-actions"><button className="button" onClick={()=>setBrands([...brands,{name:'',aliases:''}])}>添加竞品</button><button className="button primary" disabled={busy||!brands.length} onClick={()=>void act(()=>request('/baseline/config',{brands:brands.map(b=>({name:b.name,aliases:b.aliases.split(/[,，、]/).map(x=>x.trim()).filter(Boolean)}))},'PATCH'),'品牌配置已保存')}>保存品牌配置</button></div></section>;
+}

@@ -279,39 +279,15 @@ test(
         1,
       );
       await page.getByRole("button", { name: "基线分析", exact: true }).click();
-      await page.getByRole("button", { name: "品牌设置与逐题核对", exact: true }).click();
-      await page
-        .getByRole("heading", { name: "样本明细与人工核对", exact: true })
-        .waitFor();
-      await page
-        .getByRole("button", { name: "品牌与竞品配置", exact: true })
-        .click();
+      await page.getByRole("button", { name: "品牌设置", exact: true }).click();
       await page.getByLabel("目标品牌", { exact: true }).fill("鑫君威");
       await page.getByLabel("品牌别名 1", { exact: true }).fill("XJW,君威");
-      await page
-        .getByRole("button", { name: "保存品牌配置", exact: true })
-        .click();
+      await page.getByRole("button", { name: "保存品牌配置", exact: true }).click();
       await page.waitForTimeout(150);
-      const baseline = await (await fetch(root + "/api/baseline")).json();
-      assert.deepEqual(baseline.config.brands[0].aliases, ["XJW", "君威"]);
-      await page.getByRole("button", { name: "核对", exact: true }).click();
-      await page
-        .getByLabel("目标品牌情感", { exact: true })
-        .selectOption("positive");
-      await page.getByLabel("排名判定", { exact: true }).selectOption("known");
-      await page
-        .getByLabel("前三品牌", { exact: true })
-        .fill("鑫君威、三棵树、嘉宝莉");
-      await page.getByRole("button", { name: "保存核对", exact: true }).click();
-      await page.waitForTimeout(150);
-      assert.equal(
-        (await (await fetch(root + "/api/baseline")).json()).sentiment.positive,
-        1,
-      );
-      await page.getByLabel("基线平台").selectOption("deepseek");
-      await page
-        .getByRole("heading", { name: "暂无可统计的完整回答", exact: true })
-        .waitFor();
+      const baseline = await (await fetch(root + "/api/baseline/config")).json();
+      assert.deepEqual(baseline.brands[0].aliases, ["XJW", "君威"]);
+      assert.equal(await page.getByText("样本明细与人工核对").count(),0);
+      assert.equal(await page.getByLabel("目标品牌情感").count(),0);
       await page.getByRole("button", { name: "采集记录", exact: true }).click();
       await page.getByLabel("选择当前筛选的可删除记录").check();
       page.once("dialog", (d) => d.accept());
