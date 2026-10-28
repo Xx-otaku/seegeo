@@ -2183,3 +2183,10 @@ tbody tr.selected {
 @media (max-width: 650px) {
   .task-toolbar { position: static; }
 }
+/* Align website percentages with the last metric column in each half. */
+@media (min-width: 651px) {
+  .source-previews { gap: 0; }
+  .source-preview li { display: grid; grid-template-columns: 2fr 1fr; gap: 0; }
+  .source-preview li span:last-child { text-align: left; padding-left: 8px; }
+  .source-preview:nth-child(2) li span:last-child { padding-left: 20px; }
+}
