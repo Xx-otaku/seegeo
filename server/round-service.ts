@@ -71,7 +71,8 @@ export function dateSelection(store: Store, date: string, selected?: number[]) {
     const time=(t:Task)=>Date.parse(t.finished_at||t.started_at||'')||0;
     if (!prev || (valid(task)&&!valid(prev)) || (valid(task)===valid(prev) && (time(task)>time(prev) || (time(task)===time(prev)&&task.id>prev.id)))) rows.set(key,task);
   }
-  return {batches,questions,rows:[...rows.values()]};
+  const details=[...rows.values()];
+  return {batches,questions:questions.map(q=>({...q,samples:details.filter(t=>t.question_id===q.id).map(t=>({platform:t.platform,time:t.finished_at||t.started_at,status:t.status}))})),rows:details};
 }
 export function previewDate(store: Store,date: string,ids?:number[]) {
   const {batches,questions,rows}=dateSelection(store,date,ids);
